@@ -343,6 +343,7 @@ def visits_page(
     request: Request,
     abnormal_only: int = 0,
     customer_id: int | None = None,
+    customer_keyword: str = "",
 ):
     with SessionLocal() as db:
         user = _current_user_or_redirect(request, db)
@@ -353,6 +354,7 @@ def visits_page(
             db,
             user=user,
             customer_id=customer_id,
+            customer_keyword=customer_keyword,
             abnormal_only=bool(abnormal_only),
             limit=200,
         )
@@ -375,6 +377,8 @@ def visits_page(
             visits=rows,
             total=total,
             abnormal_only=bool(abnormal_only),
+            customer_id=customer_id,
+            customer_keyword=customer_keyword,
             customers=customers,
         )
 

@@ -515,6 +515,21 @@ def sync_offline_records(db: Session, *, user, record_ids: list[int]) -> int:
     return len(rows)
 
 
+def _customer_name_like(keyword: str) -> str:
+    """把用户输入转成安全的 LIKE 模式（V-12）。
+
+    必须转义 ``%`` / ``_`` / ``\\``：否则用户搜一个 ``%`` 就会命中全部记录，
+    看起来像"筛选根本没生效"。反斜杠要最先替换，否则会把后面新加的转义符再转一遍。
+    """
+    escaped = (
+        keyword.strip()
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
 def list_records(
     db: Session,
     *,
@@ -525,11 +540,16 @@ def list_records(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     visit_type: int | None = None,
+    customer_keyword: str | None = None,
     abnormal_only: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[VisitRecord], int]:
-    """按条件查询拜访记录，自动套用数据权限。"""
+    """按条件查询拜访记录，自动套用数据权限。
+
+    ``customer_keyword`` 与其余条件**可叠加**；它只是往 ``conditions`` 里再追加一条，
+    数据权限条件（下方 scope 判断）始终先生效，因此搜索不会绕过行级权限。
+    """
     scope = permission.resolve_scope(db, user)
 
     conditions = [VisitRecord.is_deleted == 0]
@@ -550,6 +570,16 @@ def list_records(
         # 直接过滤记录上的冗余列，而不是子查询 plan：
         # 临时拜访没有 plan，用子查询会全部漏掉。
         conditions.append(VisitRecord.visit_type == visit_type)
+    if customer_keyword is not None and customer_keyword.strip():
+        # 用子查询而非 join：join 引入的额外表会让本函数"只返回拜访记录"的契约变模糊，
+        # 而且这里只关心 customer_id 是否命中，子查询最直白。
+        conditions.append(
+            VisitRecord.customer_id.in_(
+                select(Customer.id).where(
+                    Customer.name.like(_customer_name_like(customer_keyword), escape="\\")
+                )
+            )
+        )
     if abnormal_only:
         conditions.append(VisitRecord.abnormal_flag == 1)
 

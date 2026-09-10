@@ -521,3 +521,68 @@ def test_auto_close_stale_records(as_sales, customer_id, db):
     refreshed = as_sales.get(f"/api/visits/{record_id}").json()
     assert refreshed["status"] == 5
     assert refreshed["abnormal_flag"] == 1
+
+
+# ==========================================================================
+# 按客户名搜索
+# ==========================================================================
+def search_visits(client, keyword: str, **params):
+    query = {"customer_keyword": keyword}
+    query.update(params)
+    return client.get("/api/visits", params=query)
+
+
+def test_search_by_customer_name_hits(as_sales, customer_id):
+    do_checkin(as_sales, customer_id)
+    body = search_visits(as_sales, "深圳").json()
+    assert body["total"] == 1
+    assert body["items"][0]["customer_id"] == customer_id
+
+
+def test_search_by_customer_name_misses(as_sales, customer_id):
+    do_checkin(as_sales, customer_id)
+    body = search_visits(as_sales, "完全不存在的客户").json()
+    assert body["total"] == 0
+    assert body["items"] == []
+
+
+def test_search_with_empty_keyword_returns_all(as_sales, customer_id):
+    """空关键词等同不筛选 —— 清空搜索框不该把列表清成空的。"""
+    do_checkin(as_sales, customer_id)
+    assert search_visits(as_sales, "").json()["total"] == 1
+
+
+def test_search_keyword_only_spaces_returns_all(as_sales, customer_id):
+    do_checkin(as_sales, customer_id)
+    assert search_visits(as_sales, "     ").json()["total"] == 1
+
+
+def test_search_keyword_is_trimmed(as_sales, customer_id):
+    do_checkin(as_sales, customer_id)
+    assert search_visits(as_sales, "  深圳  ").json()["total"] == 1
+
+
+def test_search_wildcard_chars_treated_as_literals(as_sales, customer_id):
+    """``%`` / ``_`` 必须当字面量：否则搜 ``%`` 会命中全部记录，像筛选没生效。"""
+    do_checkin(as_sales, customer_id)
+    assert search_visits(as_sales, "%").json()["total"] == 0
+    assert search_visits(as_sales, "_").json()["total"] == 0
+
+
+def test_search_composes_with_visit_type(as_sales, customer_id):
+    """关键词与已有筛选条件叠加，而不是相互覆盖。"""
+    do_checkin(as_sales, customer_id)  # 未指定类型时默认「例行拜访」(2)
+    assert search_visits(as_sales, "深圳", visit_type=2).json()["total"] == 1
+    assert search_visits(as_sales, "深圳", visit_type=3).json()["total"] == 0
+
+
+def test_search_does_not_bypass_row_level_permission(
+    as_sales, as_sales_other_team, customer_id
+):
+    """越权测试：他组销售用同样的关键词，搜不到不属于他的记录。
+
+    搜索必须叠加在数据权限之上，而不是绕开它 —— 这是本功能最容易出的安全问题。
+    """
+    do_checkin(as_sales, customer_id)
+    assert search_visits(as_sales, "深圳").json()["total"] == 1
+    assert search_visits(as_sales_other_team, "深圳").json()["total"] == 0
