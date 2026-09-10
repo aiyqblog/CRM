@@ -574,6 +574,85 @@ def cmd_done(args) -> int:
     return 0
 
 
+def current_login() -> str:
+    return api("GET", "/user")["login"]
+
+
+def cmd_init_repo(args) -> int:
+    """创建 GitHub 仓库（默认私有）、配置 origin、推送 main。
+
+    幂等：仓库已存在时跳过创建，直接配置远程并推送 ——
+    重跑不会报错，也不会覆盖已有内容。
+    """
+    login = current_login()
+    owner_repo = args.repository or f"{login}/{args.name}"
+
+    # --- 1. 创建仓库（若不存在）------------------------------------------
+    try:
+        repo = api("GET", f"/repos/{owner_repo}")
+        print(f"仓库已存在：{repo['html_url']}")
+    except FlowError as exc:
+        if "404" not in str(exc):
+            raise
+        try:
+            repo = api(
+                "POST",
+                "/user/repos",
+                {
+                    "name": args.name,
+                    "private": not args.public,
+                    "auto_init": False,
+                    # 不勾选 auto_init：仓库里已有完整历史，初始化 README 会造成分叉
+                    "description": "CRM 拜访与销售项目管理系统（自建，参照销售易设计）",
+                },
+            )
+        except FlowError as create_exc:
+            if "403" in str(create_exc) or "401" in str(create_exc):
+                raise FlowError(
+                    "当前令牌无权创建仓库。\n"
+                    "  细粒度令牌默认不能建仓。请二选一：\n"
+                    "    a) 到 GitHub 网页手动建一个空仓库（不要勾选 README/gitignore/license），\n"
+                    "       然后重跑本命令并加 --repository <owner>/<repo>\n"
+                    "    b) 换一个具备建仓权限的令牌"
+                ) from None
+            raise
+        print(f"已创建{'私有' if repo['private'] else '公开'}仓库：{repo['html_url']}")
+
+    if not repo.get("private", True) and not args.public:
+        print("  提示：仓库当前是公开的。公司代码建议改为私有（Settings → Danger Zone → Change visibility）")
+
+    # --- 2. 配置 origin ---------------------------------------------------
+    remote_url = f"https://github.com/{owner_repo}.git"
+    existing = _git("remote", check=False).stdout.split()
+    if "origin" in existing:
+        _git("remote", "set-url", "origin", remote_url)
+    else:
+        _git("remote", "add", "origin", remote_url)
+    print(f"已配置 origin → {remote_url}")
+    print("  （远程地址里不含 token，凭据在推送时临时注入）")
+
+    # --- 3. 推送 main -----------------------------------------------------
+    branch = current_branch()
+    if branch != BASE_BRANCH:
+        raise FlowError(
+            f"当前分支是 {branch}，不是 {BASE_BRANCH}。请先切回 main 再推送初始代码。"
+        )
+
+    _git("push", "-u", "origin", BASE_BRANCH, use_token=True)
+    print(f"已推送 {BASE_BRANCH}")
+
+    # --- 4. 收尾提示 ------------------------------------------------------
+    print()
+    print("接下来建议在 GitHub 上做两件事（都需要手动，API 改不了或不该由脚本改）：")
+    print(f"  1. 给 {BASE_BRANCH} 加分支保护：Settings → Branches → 要求 PR 才能合并")
+    print("     —— 这是自动化流水线的最后一道闸门，务必开启")
+    print("  2. 仓库里创建 labels：agent:queued / agent:working / agent:review / agent:blocked")
+    print("     （首次 claim 时会自动创建，也可以现在手动建）")
+    print()
+    print(f"仓库地址：{repo['html_url']}")
+    return 0
+
+
 def cmd_current(args) -> int:
     branch = current_branch()
     number = issue_number_from_branch(branch)
@@ -587,6 +666,12 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("doctor", help="环境自检").set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("init-repo", help="创建 GitHub 仓库、配置 origin 并推送 main")
+    p.add_argument("--name", default="crm-visit-project", help="仓库名")
+    p.add_argument("--repository", help="owner/repo；留空则用当前登录账号")
+    p.add_argument("--public", action="store_true", help="创建为公开仓库（默认私有）")
+    p.set_defaults(func=cmd_init_repo)
 
     p = sub.add_parser("list-issues", help="列出可处理的 Issue")
     p.add_argument("--limit", type=int, default=0, help="最多返回几个（0 表示不限）")
