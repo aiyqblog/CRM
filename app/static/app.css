@@ -352,3 +352,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .mt0 { margin-top: 0; }
 .mb0 { margin-bottom: 0; }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ---------- 工具栏内的搜索表单 ---------- */
+.toolbar-search { display: flex; gap: 8px; align-items: center; }
+.toolbar-search input[type="search"] {
+  padding: 7px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  min-width: 190px;
+}
+.toolbar-search input[type="search"]:focus {
+  outline: none;
+  border-color: var(--brand);
+}

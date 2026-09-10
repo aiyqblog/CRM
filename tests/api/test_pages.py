@@ -261,3 +261,63 @@ def test_marketing_cannot_see_create_forms(client):
     response = client.get("/customers")
     assert response.status_code == 200
     assert 'data-testid="customer-form"' not in response.text
+
+
+# ==========================================================================
+# 拜访列表按客户名搜索
+# ==========================================================================
+def _checkin_via_api(client, customer_id):
+    from tests.conftest import NEARBY_LAT, NEARBY_LNG
+
+    response = client.post(
+        "/api/visits/checkin",
+        json={
+            "customer_id": customer_id,
+            "longitude": NEARBY_LNG,
+            "latitude": NEARBY_LAT,
+            "address": "深圳市南山区科技园南区高新南七道 12 号",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_visits_page_renders_search_box(client):
+    form_login(client)
+    html = client.get("/visits").text
+    assert 'data-testid="visit-search-form"' in html
+    assert 'data-testid="visit-search-input"' in html
+    assert 'name="customer_keyword"' in html
+
+
+def test_visits_page_filters_by_customer_keyword(client, customer_id):
+    form_login(client)
+    _checkin_via_api(client, customer_id)
+
+    hit = client.get("/visits", params={"customer_keyword": "深圳"}).text
+    assert 'data-testid="visit-row"' in hit
+    assert "深圳华智终端有限公司" in hit
+
+    miss = client.get("/visits", params={"customer_keyword": "查无此客户"}).text
+    assert 'data-testid="visit-row"' not in miss
+    assert 'data-testid="visit-empty"' in miss
+
+
+def test_visits_page_empty_state_names_the_keyword(client):
+    """无结果时要说明是"没搜到"，而不是让用户以为本来就没有数据。"""
+    form_login(client)
+    html = client.get("/visits", params={"customer_keyword": "查无此客户"}).text
+    assert "查无此客户" in html
+
+
+def test_visits_page_preserves_keyword_in_filter_links(client):
+    """切到「只看异常」时不该把搜索词丢掉 —— 两个筛选要能叠加。"""
+    form_login(client)
+    html = client.get("/visits", params={"customer_keyword": "深圳"}).text
+    assert "customer_keyword=%E6%B7%B1%E5%9C%B3" in html
+
+
+def test_visits_page_search_input_keeps_current_value(client):
+    form_login(client)
+    html = client.get("/visits", params={"customer_keyword": "深圳"}).text
+    assert 'value="深圳"' in html

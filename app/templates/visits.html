@@ -2,19 +2,30 @@
 {% block title %}拜访记录{% endblock %}
 
 {% block content %}
+{% set kw_qs = (('?customer_keyword=' ~ (customer_keyword | urlencode)) if customer_keyword else '') %}
+{% set kw_amp = (('&customer_keyword=' ~ (customer_keyword | urlencode)) if customer_keyword else '') %}
 <div class="page-head">
   <div>
     <h1 class="page-title">拜访记录</h1>
     <p class="page-sub">
       共 {{ total }} 条
+      {% if customer_keyword %} · 客户名包含「{{ customer_keyword }}」{% endif %}
       {% if abnormal_only %} · 仅显示待复核异常记录{% endif %}
     </p>
   </div>
   <div class="toolbar">
+    <form method="get" action="/visits" class="toolbar-search" data-testid="visit-search-form">
+      {% if abnormal_only %}<input type="hidden" name="abnormal_only" value="1">{% endif %}
+      {% if customer_id %}<input type="hidden" name="customer_id" value="{{ customer_id }}">{% endif %}
+      <input type="search" name="customer_keyword" value="{{ customer_keyword }}"
+             placeholder="按客户名搜索" aria-label="按客户名搜索"
+             data-testid="visit-search-input">
+      <button type="submit" class="btn btn-sm" data-testid="visit-search-submit">搜索</button>
+    </form>
     {% if abnormal_only %}
-    <a href="/visits" class="btn" data-testid="filter-all">全部记录</a>
+    <a href="/visits{{ kw_qs }}" class="btn" data-testid="filter-all">全部记录</a>
     {% else %}
-    <a href="/visits?abnormal_only=1" class="btn" data-testid="filter-abnormal">只看异常</a>
+    <a href="/visits?abnormal_only=1{{ kw_amp }}" class="btn" data-testid="filter-abnormal">只看异常</a>
     {% endif %}
     <a href="/visits/new" class="btn btn-primary" data-testid="new-visit">发起拜访</a>
   </div>
@@ -58,7 +69,13 @@
       </tbody>
     </table>
     {% else %}
-    <div class="empty">暂无拜访记录</div>
+    <div class="empty" data-testid="visit-empty">
+      {% if customer_keyword %}
+      没有客户名包含「{{ customer_keyword }}」的拜访记录
+      {% else %}
+      暂无拜访记录
+      {% endif %}
+    </div>
     {% endif %}
   </div>
 </div>
