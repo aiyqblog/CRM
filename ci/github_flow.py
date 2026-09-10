@@ -283,16 +283,41 @@ def cmd_doctor(_args) -> int:
     if owner_repo:
         try:
             repo = api("GET", f"/repos/{owner_repo}")
-            perms = repo.get("permissions", {})
             print(f"  ✓ API 可达（{'私有' if repo.get('private') else '公开'}仓库，默认分支 {repo.get('default_branch')}）")
-            if not perms.get("push"):
-                print("  ✗ 当前令牌没有 push 权限")
-                ok = False
-            else:
-                print("  ✓ 令牌有 push 权限")
         except FlowError as exc:
             print(f"  ✗ {exc}")
             ok = False
+
+    # 写权限：必须真的探一次，不能看 ``repo["permissions"]``
+    #
+    # ``permissions`` 反映的是「**登录用户**对该仓库的角色」，不是「令牌被授予的权限」。
+    # 对自己的仓库它恒为 push=True，于是引擎不可写时自检依然报绿，直到 push 阶段才炸出
+    # ``remote: Write access to repository not granted``——排查方向全被带偏。
+    #
+    # 用一个只创建悬空对象、不改动任何 ref 的写入探测替代它。
+    if owner_repo:
+        probe_write = True
+        try:
+            api(
+                "POST",
+                f"/repos/{owner_repo}/git/blobs",
+                {"content": "crm-flow-permission-probe", "encoding": "utf-8"},
+            )
+            print("  ✓ 令牌有写权限（Contents: Read and write）")
+            probe_write = False
+        except FlowError as exc:
+            message = str(exc)
+            if "409" in message or "410" in message or "empty" in message.lower():
+                # 仓库还没有任何提交，GitHub 无法创建 blob，无从探测 —— 不是权限问题
+                print("  ! 仓库为空，写权限将在首次 push 时验证")
+                probe_write = False
+            elif "404" in message or "403" in message:
+                print("  ✗ 令牌缺少写权限：需要 Contents = Read and write")
+                print(f"    当前仓库不在令牌的授权范围内时同样会返回 404（{owner_repo}）")
+                ok = False
+                probe_write = False
+        if probe_write:
+            print("  ! 写权限探测未得出结论，继续执行")
 
     # git 状态
     try:
@@ -638,7 +663,30 @@ def cmd_init_repo(args) -> int:
             f"当前分支是 {branch}，不是 {BASE_BRANCH}。请先切回 main 再推送初始代码。"
         )
 
-    _git("push", "-u", "origin", BASE_BRANCH, use_token=True)
+    try:
+        _git("push", "-u", "origin", BASE_BRANCH, use_token=True)
+    except FlowError as exc:
+        message = str(exc)
+        if "Write access to repository not granted" in message:
+            raise FlowError(
+                "推送被拒：令牌通过了认证，但**没有写权限**。\n"
+                "  这与「令牌过期」是两回事 —— 认证成功、授权失败。\n"
+                "  检查该细粒度令牌的 Permissions（不是 Repository access）：\n"
+                "    Contents        Read and write   ← 缺这个就会报本条错误\n"
+                "    Issues          Read and write\n"
+                "    Pull requests   Read and write\n"
+                "    Workflows       Read and write   ← 推 .github/workflows/ 需要\n"
+                "    Metadata        Read-only（强制附带）\n"
+                "  另外确认本仓库已加入令牌的 Repository access 列表。"
+            ) from None
+        if "without `workflow` scope" in message or "workflow" in message.lower():
+            raise FlowError(
+                "推送被拒：令牌缺少 Workflows 权限。\n"
+                "  仓库里有 .github/workflows/ 文件，GitHub 要求令牌具备\n"
+                "  Workflows = Read and write 才允许推送工作流文件。\n"
+                "  补上该权限后重试，不要用绕过方式。"
+            ) from None
+        raise
     print(f"已推送 {BASE_BRANCH}")
 
     # --- 4. 收尾提示 ------------------------------------------------------
