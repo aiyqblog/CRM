@@ -43,6 +43,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 API = "https://api.github.com"
 
+
+def _load_dotenv() -> None:
+    """从项目根的 ``.env`` 载入配置（若存在）。
+
+    存在的意义是让凭据有个**不进入聊天记录、也不进入仓库**的落脚点：
+    ``.env`` 已在 .gitignore 中，token 写在那里比贴在对话里安全得多。
+    已存在的环境变量优先，不会被文件覆盖。
+    """
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        return
+
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv()
+
 # --- Agent 工作流标签 -------------------------------------------------------
 LABEL_QUEUED = "agent:queued"        # 待处理
 LABEL_WORKING = "agent:working"      # 处理中（防重复领取）
