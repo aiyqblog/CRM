@@ -1,0 +1,81 @@
+name: CI
+
+# 与本地 ci/run_pipeline.py 的阶段划分保持一致。
+# 本地绿、CI 红这类不一致比没有本地流水线更糟 —— 会让人不再信任本地结果。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的新推送取消上一次运行，避免排队堆积
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  # 测试环境的口令散列轮数降到 1000。
+  # 不降的话每个用例重建种子数据要 6 秒，整个套件从 30 秒膨胀到十几分钟。
+  CRM_PBKDF2_ITERATIONS: "1000"
+
+jobs:
+  lint:
+    name: 静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m ruff check app tests ci
+
+  test:
+    name: 单元与接口测试
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: 单元测试
+        run: pytest tests/unit -q --no-header
+      - name: 接口测试
+        run: pytest tests/api -q --no-header
+
+  e2e:
+    name: 端到端测试
+    runs-on: ubuntu-latest
+    needs: lint
+    env:
+      # Linux runner 上没有系统 Chrome，用 Playwright 自带的 chromium
+      CRM_E2E_BROWSER_CHANNEL: chromium
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: 安装浏览器
+        # --with-deps 会一并装上字体、图形库等系统依赖；
+        # 少这一步会出现「浏览器启动了但截图是空白」这类难查的问题
+        run: python -m playwright install --with-deps chromium
+      - name: 运行 E2E
+        run: pytest tests/e2e -q --no-header -m e2e --tracing=retain-on-failure
+      - name: 上传失败现场
+        # Playwright 的 trace 是「自动定位失败根因」的关键材料，
+        # 失败时务必留存，否则只能靠猜
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

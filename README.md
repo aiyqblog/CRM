@@ -135,6 +135,65 @@ lint  →  unit  →  api  →  e2e  →  build  →  deploy  →  smoke
 
 ---
 
+## GitHub Issue 自动化
+
+从 Issue 到 PR 的闭环：**拉 Issue → 建分支 → 编码 → 流水线 → 提交 → 推送 → 开 PR**。
+
+### 分工
+
+这是整套设计里最关键的一条：
+
+| 谁 | 干什么 | 为什么 |
+|---|---|---|
+| `ci/github_flow.py` | 拉 Issue、打标签、建分支、提交、推送、开 PR | 确定性动作。脚本执行才可复现、可审计、可回滚 |
+| Agent（按 `github-issue-auto-develop` skill） | 读 Issue、判断可行性、改代码、补测试、定位失败根因 | 需要判断的那一件事 |
+
+**CI 运行时与工作流脚本里都没有 LLM。** 只有「怎么改代码」这一步需要智能。
+
+### 命令速查
+
+```bash
+python ci/github_flow.py doctor            # 环境自检（token / 仓库 / 权限 / 工作区）
+python ci/github_flow.py list-issues --limit 2   # 列出可处理的 Issue，末尾输出编号 JSON
+python ci/github_flow.py claim 12          # 领取：打标签 + 从 main 建分支
+python ci/github_flow.py verify            # 跑本地流水线
+python ci/github_flow.py commit 12 -m "feat: ..."
+python ci/github_flow.py push 12
+python ci/github_flow.py pr 12             # 开 PR（自动填入流水线结果）
+python ci/github_flow.py fail 12 -m "原因"  # 标记阻塞，交人工
+```
+
+### 标签语义
+
+状态全部放在 git 分支与 GitHub 标签上，不落本地数据库 ——
+这样跨运行、跨机器、跨人都能接续，人也能一眼看出进展。
+
+| 标签 | 含义 |
+|---|---|
+| `agent:queued` | 待处理（优先级最高） |
+| `agent:working` | 处理中（防止重复领取） |
+| `agent:review` | 已开 PR，等待人工审查 |
+| `agent:blocked` | 自动化失败，需人工介入 |
+| `needs-design` / `question` / `wontfix` | **跳过**，这些需要人的判断 |
+
+### 护栏
+
+- **绝不提交或推送到 `main`** —— 脚本层面直接拒绝
+- **绝不自动合并 PR** —— PR 就是人工闸门
+- **绝不把 token 写进仓库** —— 只从 `GITHUB_TOKEN` 读，推送经 `git -c http.extraheader` 传递，不落 `.git/config`
+- **一次最多处理 2 个 Issue** —— 无人值守时堆量只会制造需要人擦屁股的 PR
+
+### 凭据
+
+```bash
+export GITHUB_TOKEN=github_pat_xxx          # 细粒度令牌
+export GITHUB_REPOSITORY=owner/repo         # 也可以省略，从 origin 推断
+```
+
+令牌需要的权限：**Contents(RW)、Issues(RW)、Pull requests(RW)、Metadata(R)**。
+
+---
+
 ## 约定
 
 - **业务阈值集中在 `app/constants.py` 与 `app/config.py`**，不要在业务代码里写魔法数字
