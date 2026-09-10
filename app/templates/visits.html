@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}拜访记录{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">拜访记录</h1>
+    <p class="page-sub">
+      共 {{ total }} 条
+      {% if abnormal_only %} · 仅显示待复核异常记录{% endif %}
+    </p>
+  </div>
+  <div class="toolbar">
+    {% if abnormal_only %}
+    <a href="/visits" class="btn" data-testid="filter-all">全部记录</a>
+    {% else %}
+    <a href="/visits?abnormal_only=1" class="btn" data-testid="filter-abnormal">只看异常</a>
+    {% endif %}
+    <a href="/visits/new" class="btn btn-primary" data-testid="new-visit">发起拜访</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body tight">
+    {% if visits %}
+    <table data-testid="visit-table">
+      <thead>
+        <tr>
+          <th>记录号</th><th>客户</th><th>拜访人</th><th>类型</th>
+          <th>签到时间</th><th class="num">时长</th><th>定位</th><th>状态</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in visits %}
+        <tr data-testid="visit-row">
+          <td class="mono">{{ v.record_no }}</td>
+          <td>{{ v.customer.name if v.customer else '—' }}</td>
+          <td class="muted">{{ v.owner.display_name if v.owner else '—' }}</td>
+          <td class="muted">{{ VISIT_TYPE_LABELS.get(v.visit_type, '—') }}</td>
+          <td class="mono nowrap">{{ v.checkin_time.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="num">{{ v.duration_min if v.duration_min is not none else '—' }}</td>
+          <td>
+            {% if v.location_status == 1 %}<span class="badge badge-green">正常</span>
+            {% elif v.location_status == 2 %}<span class="badge badge-amber">超范围</span>
+            {% elif v.location_status == 3 %}<span class="badge badge-gray">失败</span>
+            {% else %}<span class="badge badge-red">模拟</span>{% endif %}
+            {% if v.distance_m is not none %}<span class="faint" style="font-size:11px">{{ v.distance_m }}m</span>{% endif %}
+          </td>
+          <td>
+            {% if v.status == 2 %}<span class="badge badge-blue">进行中</span>
+            {% elif v.status == 3 %}<span class="badge badge-green">已完成</span>
+            {% else %}<span class="badge badge-gray">已自动关闭</span>{% endif %}
+            {% if v.abnormal_flag %}<span class="badge badge-red">异常</span>{% endif %}
+          </td>
+          <td><a href="/visits/{{ v.id }}">查看</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">暂无拜访记录</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}发起拜访{% endblock %}
+
+{% block content %}
+<div class="page-head" data-page-node-id="10PV1OjS3zYpfyZzUjFkVf">
+  <div data-page-node-id="oNFriyscTpfNZONKeApyUX">
+    <h1 class="page-title" data-page-node-id="c1dlRBW3mlLH0cp1pfLCAV">发起拜访（签到）</h1>
+    <p class="page-sub" data-page-node-id="hVdSsGHrqXcyJwIGpoXSob">签到后需填写纪要并签退，一条拜访记录才算完成</p>
+  </div>
+  <a href="/visits" class="btn" data-page-node-id="tVl7A4tIdjFgDkks7WRPY3">返回列表</a>
+</div>
+
+<div class="grid grid-main" data-page-node-id="RhiupeKEtoeVfimLWBOat9">
+  <div class="card" data-page-node-id="E1yj5R0u2oCdMNQeHnRbCm">
+    <div class="card-head" data-page-node-id="R4lLjOrXMC0wG58mnjJydl"><h2 class="card-title" data-page-node-id="FAY02jD2SAdpRMVzIFdjUB">签到信息</h2></div>
+    <div class="card-body" data-page-node-id="E8NzYaJPzJvAA9iTrTv7Vs">
+      <form method="post" action="/visits/checkin" data-testid="checkin-form" data-page-node-id="HisF7ikF0zKij1Y7gW3ytA">
+        <div class="field" data-page-node-id="wvE6pwrVV9dkcNgPxDPHr3">
+          <label for="customer_id" data-page-node-id="bVWG5csUseZpf1KwFwGVGw">客户 *</label>
+          <select id="customer_id" name="customer_id" required data-testid="checkin-customer" data-page-node-id="vmLClPgB0rKfuBzQofHNgH">
+            <option value="" data-page-node-id="Cx0b4sbIPiuFoj7BbEgCBm">请选择客户</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}"
+                    data-lng="{{ c.longitude if c.longitude is not none else '' }}"
+                    data-lat="{{ c.latitude if c.latitude is not none else '' }}"
+                    data-address="{{ c.address or '' }}"
+                    {{ 'selected' if selected and selected.id == c.id else '' }} data-page-node-id="GrEK0pra2R6ZHtrsVdQYJF">
+              {{ c.name }}{% if c.latitude is none %}（未登记坐标）{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field" data-page-node-id="6D7Zp0gfDpzBWgkUx9cBzZ">
+          <label for="plan_id" data-page-node-id="dR40MSRWU1kmsCr7ReLVMa">关联拜访计划（可选）</label>
+          <select id="plan_id" name="plan_id" data-page-node-id="8KDPmyEZnQDri0SnkbHeZ3">
+            <option value="" data-page-node-id="JScixhCBQnDYB38F45GOQL">临时拜访</option>
+            {% for p in plans %}
+            <option value="{{ p.id }}" data-page-node-id="G08nOT5hRDJ2Z3oz4eEVqk">{{ p.plan_no }} · {{ p.visit_purpose }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-row" data-page-node-id="dXzbecHEXMx2Pa1IaFQ7U2">
+          <div class="field" data-page-node-id="H0rgbT90wOiqSqM87N1yUA">
+            <label for="visit_type" data-page-node-id="VFdqjH6pByZDjFFtgkZRXB">拜访类型</label>
+            <select id="visit_type" name="visit_type" data-testid="checkin-type" data-page-node-id="g31BZAA9ZpoFraNPxaKz5y">
+              {% for key, label in VISIT_TYPE_LABELS.items() %}
+              <option value="{{ key }}" {{ 'selected' if key == 2 else '' }} data-page-node-id="HYWZSyDZ5vnHFDa1tvotsc">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field" data-page-node-id="L5kQfmlAtUesqGBoRAgdVJ">
+            <label for="is_mocked" data-page-node-id="VbrYXgTPJOBGCYxQk34Ckl">定位来源</label>
+            <select id="is_mocked" name="is_mocked" data-testid="checkin-mocked" data-page-node-id="pTlJ0NFvTsA4sDClFHC70Y">
+              <option value="0" data-page-node-id="Vxu4CfiEizfDRNnED8QZPc">真实定位</option>
+              <option value="1" data-page-node-id="flzQVeC2ELQYFSTT2iBmce">模拟定位（用于验证反作弊）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" data-page-node-id="cZUaPvmF6lyOuFPYylVYGp">
+          <label for="address" data-page-node-id="Bhrzp8V102GN916mBwlMfD">签到地址</label>
+          <input id="address" name="address" data-testid="checkin-address"
+                 placeholder="留空则使用客户登记地址" data-page-node-id="mZLuPTu1AClQZHQNVDfCc2">
+        </div>
+
+        <div class="form-row" data-page-node-id="OpQSd9HoxVlgvmyujCbEpy">
+          <div class="field" data-page-node-id="rpC8f93pNBvm89R0IzEfz0">
+            <label for="longitude" data-page-node-id="tNdtCxrxRPef6RAQr5G8Ve">经度</label>
+            <input id="longitude" name="longitude" data-testid="checkin-lng" placeholder="留空使用客户坐标" data-page-node-id="WcVMjDJowQOFTW85aAtIDy">
+          </div>
+          <div class="field" data-page-node-id="KjhSDpwCzGXITVIVwfABgI">
+            <label for="latitude" data-page-node-id="sC2F6CoHkLzgx5PSYhduTq">纬度</label>
+            <input id="latitude" name="latitude" data-testid="checkin-lat" placeholder="留空使用客户坐标" data-page-node-id="eYDWB6uGAkEoiRrUPphBEh">
+          </div>
+        </div>
+        <div class="hint faint" id="geo-status" style="margin:-6px 0 12px" data-page-node-id="iXQq6GbNr9L5Y5z4XosFw6"></div>
+
+        <div class="form-actions" data-page-node-id="bqrkadYWb0o2YGsccZSg2w">
+          <button class="btn btn-primary" type="submit" data-testid="checkin-submit" data-page-node-id="IDV6zVPzKeGoY8dDuNUS9x">签到</button>
+          <button class="btn" type="button"
+                  onclick="fillGeolocation('longitude','latitude','geo-status')" data-page-node-id="6FWCCYQ60ngxNN7bijCJST">
+            使用当前位置
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card" data-page-node-id="dphP2oXIhhi1HoVoDlJvmP">
+    <div class="card-head" data-page-node-id="NQRrEFx7UHMaWhmGrBHRYz"><h2 class="card-title" data-page-node-id="RV9YbgiUJMotZzH6IjmYwY">签到校验规则</h2></div>
+    <div class="card-body muted" style="font-size:12px;line-height:2" data-page-node-id="Ct75bXq9eAlLzDj23j1b3D">
+      <div data-page-node-id="ki3anX6dQEKvv465IM8h4A"><span class="badge badge-gray" data-page-node-id="1ASaCuF6ns3pIOpEGfgh9n">R-01</span> 签到不得早于计划开始时间前 30 分钟</div>
+      <div data-page-node-id="N6R6EA4IuOBn45U412KRbd"><span class="badge badge-gray" data-page-node-id="2OWsWsV2eyM2E9mMSLlQQq">R-03</span> 距客户地址超 1000m 标记「超出范围」，需填说明</div>
+      <div data-page-node-id="1wAlRAiZLAWgGsKLABWuFa"><span class="badge badge-gray" data-page-node-id="DYF44OX4h63eipiugqXW6C">R-04</span> 同一时段不允许存在重叠的未签退记录</div>
+      <div data-page-node-id="PooaEJfecCzxUZ8y0CXZFJ"><span class="badge badge-gray" data-page-node-id="av8AZxRSOUI9OYLWQo6x4x">R-06</span> 客户未登记坐标时跳过距离校验</div>
+      <div data-page-node-id="E0zZeUd2Atj2D1M3ACYft5"><span class="badge badge-gray" data-page-node-id="uDYL7eDOquTKoSDiuuh0ds">R-07</span> 检测到模拟定位将强制主管复核</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  prefillCustomerCoords('customer_id', 'longitude', 'latitude');
+</script>
+{% endblock %}

@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}{{ project.project_name }}{% endblock %}
+
+{% set cur_idx = STAGE_ORDER.index(project.stage_enum) %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title" data-testid="project-title">{{ project.project_name }}</h1>
+    <p class="page-sub">
+      <span class="mono">{{ project.project_no }}</span>
+      · {{ project.customer.name if project.customer else '—' }}
+      · {{ project.owner.display_name if project.owner else '—' }}
+    </p>
+  </div>
+  <div class="toolbar">
+    {% if project.status == 1 %}<span class="badge badge-blue">进行中</span>
+    {% else %}<span class="badge badge-gray">已关闭 · {{ project.close_type }}</span>{% endif %}
+    {% if project.stage_stagnant %}<span class="badge badge-amber">阶段停滞</span>{% endif %}
+    <a href="/projects" class="btn">返回列表</a>
+  </div>
+</div>
+
+<!-- 阶段流程条 -->
+<div class="card">
+  <div class="stagebar" data-testid="stage-bar">
+    {% for stage in STAGE_ORDER %}
+    <div class="stagechip {{ 'done' if loop.index0 < cur_idx else ('current' if loop.index0 == cur_idx else '') }} {{ 'stagnant' if loop.index0 == cur_idx and project.stage_stagnant else '' }}"
+         data-testid="stage-{{ stage.value }}">
+      <div class="name">{{ STAGE_LABELS.get(stage) }}</div>
+      <div class="rate">赢率 {{ [10, 20, 40, 60, 75, 85, 95, 100][loop.index0] }}%</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid grid-main">
+  <div>
+    <!-- 产出物门禁 -->
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">当前阶段产出物（{{ STAGE_LABELS.get(project.stage_enum) }}）</h2>
+        {% if gate_result.passed %}
+        <span class="badge badge-green" data-testid="gate-status">已齐备，可推进</span>
+        {% else %}
+        <span class="badge badge-red" data-testid="gate-status">
+          缺 {{ gate_result.missing | length }} 项
+        </span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if stage_items %}
+          {% for item in stage_items %}
+          <div class="gate-item" data-testid="gate-item-{{ item.item_code }}">
+            <div class="gate-mark {{ 'done' if item.status > 0 else '' }} {{ 'optional' if not item.required else '' }}">
+              {{ '✓' if item.status > 0 else '' }}
+            </div>
+            <div class="gate-body">
+              <div class="gate-name">
+                {{ item.item_name }}
+                <span class="mono faint" style="font-size:11px">{{ item.item_code }}</span>
+                {% if not item.required %}<span class="badge badge-gray">可选</span>{% endif %}
+              </div>
+              {% if item.status > 0 %}
+              <div class="gate-meta">
+                已提交{% if item.submitted_at %} · {{ item.submitted_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+              </div>
+              {% if item.content %}<div class="gate-meta">{{ item.content }}</div>{% endif %}
+              {% else %}
+              <form method="post" action="/projects/{{ project.id }}/gate/{{ item.item_code }}"
+                    class="gate-form" data-testid="gate-form-{{ item.item_code }}">
+                <input name="content" placeholder="填写该项产出物内容" required>
+                <button class="btn btn-sm" type="submit"
+                        data-testid="gate-submit-{{ item.item_code }}">提交</button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+        <div class="empty">该阶段无产出物要求</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 阶段操作 -->
+    {% if project.status == 1 %}
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">阶段操作</h2></div>
+      <div class="card-body">
+        <form method="post" action="/projects/{{ project.id }}/advance" data-testid="advance-form">
+          <div class="field">
+            <label for="remark">推进备注</label>
+            <input id="remark" name="remark" data-testid="advance-remark">
+          </div>
+          {% if not gate_result.passed and can_override %}
+          <div class="field">
+            <label for="override_reason">门禁覆盖理由（产出物缺失时必填，至少 30 字）</label>
+            <textarea id="override_reason" name="override_reason" style="min-height:64px"
+                      data-testid="advance-override"></textarea>
+            <div class="hint">R-21：覆盖需主管权限并留痕</div>
+          </div>
+          {% endif %}
+          <div class="form-actions">
+            {% if is_last %}
+            <span class="muted">已处于最后阶段</span>
+            {% else %}
+            <button class="btn btn-primary" type="submit" data-testid="advance-submit">
+              推进至下一阶段
+            </button>
+            {% endif %}
+          </div>
+        </form>
+
+        {% if cur_idx > 0 %}
+        <form method="post" action="/projects/{{ project.id }}/rollback"
+              style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"
+              data-testid="rollback-form">
+          <div class="field">
+            <label for="reason">回退原因（至少 20 字）</label>
+            <input id="reason" name="reason" data-testid="rollback-reason">
+          </div>
+          <button class="btn btn-sm" type="submit" data-testid="rollback-submit">回退到上一阶段</button>
+        </form>
+        {% endif %}
+
+        <form method="post" action="/projects/{{ project.id }}/close"
+              style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"
+              data-testid="close-form">
+          <div class="form-row">
+            <div class="field">
+              <label for="close_type">关闭类型</label>
+              <select id="close_type" name="close_type" data-testid="close-type">
+                <option value="1">赢单</option>
+                <option value="2">输单</option>
+                <option value="3">搁置</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="lost_to_competitor">输给竞品（输单必填）</label>
+              <input id="lost_to_competitor" name="lost_to_competitor"
+                     data-testid="close-competitor">
+            </div>
+          </div>
+          <div class="field">
+            <label for="close_reason">关闭原因</label>
+            <input id="close_reason" name="close_reason" data-testid="close-reason">
+          </div>
+          <button class="btn btn-sm" type="submit" data-testid="close-submit">关闭项目</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 拜访时间轴 -->
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">关联拜访（{{ visits | length }}）</h2>
+        <a href="/visits/new" class="btn btn-sm btn-ghost">发起拜访 →</a>
+      </div>
+      <div class="timeline" data-testid="project-visits">
+        {% if visits %}
+          {% for v in visits %}
+          <div class="tl-item">
+            <div class="tl-dot {{ 'gray' if v.abnormal_flag }}"></div>
+            <div class="tl-body">
+              <div class="tl-head">
+                <span class="tl-title"><a href="/visits/{{ v.id }}">{{ v.record_no }}</a></span>
+                <span class="tl-time">{{ v.checkin_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% if v.duration_min is not none %}
+                <span class="badge badge-gray">{{ v.duration_min }} 分钟</span>
+                {% endif %}
+              </div>
+              <div class="tl-text">{{ v.content or '（未填写纪要）' }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+        <div class="empty">该项目暂无关联拜访</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">项目信息</h2></div>
+      <div class="card-body">
+        <dl class="dl">
+          <dt>当前阶段</dt><dd><span class="badge badge-brand">{{ STAGE_LABELS.get(project.stage_enum) }}</span></dd>
+          <dt>赢单概率</dt><dd>{{ project.win_rate }}%（由阶段自动带出）</dd>
+          <dt>阶段停留</dt>
+          <dd>
+            {{ project.stage_stay_days }} 天
+            {% if project.stage_benchmark %}
+            / 典型 {{ project.stage_benchmark.typical_days }} 天
+            {% endif %}
+          </dd>
+          <dt>预计单价</dt>
+          <dd class="mono">{{ project.unit_price if project.unit_price else '—' }}</dd>
+          <dt>预计年用量</dt>
+          <dd class="mono">{{ '{:,}'.format(project.est_annual_qty) if project.est_annual_qty else '—' }}</dd>
+          <dt>生命周期</dt>
+          <dd>{{ project.lifecycle_years ~ ' 年' if project.lifecycle_years else '—' }}</dd>
+          <dt>预计年营收</dt>
+          <dd class="mono">
+            {% if project.est_annual_revenue %}￥{{ '{:,.0f}'.format(project.est_annual_revenue) }}{% else %}—{% endif %}
+          </dd>
+          <dt>预计总营收</dt>
+          <dd class="mono">
+            {% if project.est_total_revenue %}￥{{ '{:,.0f}'.format(project.est_total_revenue) }}{% else %}—{% endif %}
+          </dd>
+          <dt>主要竞品</dt><dd>{{ project.competitor or '—' }}</dd>
+          <dt>终端客户</dt>
+          <dd>
+            {{ project.end_customer_id or '—' }}
+            {% if project.end_customer_locked %}<span class="badge badge-amber">已锁定报备</span>{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">阶段历史</h2></div>
+      <div class="timeline" data-testid="stage-history">
+        {% for h in history %}
+        <div class="tl-item">
+          <div class="tl-dot {{ 'gray' if not h.gate_passed }}"></div>
+          <div class="tl-body">
+            <div class="tl-head">
+              <span class="tl-title">
+                {% if h.from_stage %}
+                  {{ STAGE_LABELS.get(ProjectStage(h.from_stage)) }} →
+                {% endif %}
+                {{ STAGE_LABELS.get(ProjectStage(h.to_stage)) }}
+              </span>
+              <span class="tl-time">{{ h.operated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+            <div class="tl-text">
+              {% if h.stay_days is not none %}停留 {{ h.stay_days }} 天 · {% endif %}
+              {% if h.gate_passed %}门禁通过{% else %}
+                <span class="badge badge-amber">门禁覆盖</span>
+              {% endif %}
+            </div>
+            {% if h.override_reason %}
+            <div class="tl-text faint">覆盖理由：{{ h.override_reason }}</div>
+            {% endif %}
+            {% if h.remark %}<div class="tl-text faint">{{ h.remark }}</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

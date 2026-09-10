@@ -1,0 +1,37 @@
+# 本地测试环境编排
+#
+# 端口特意用 18080 而非 8000：避免与本机已占用 8000 的服务冲突，
+# 这类冲突在本地很常见，排查起来却很浪费时间。
+
+services:
+  crm:
+    build:
+      context: .
+    image: crm:local
+    container_name: crm-test-env
+    restart: unless-stopped
+    ports:
+      - "18080:8000"
+    environment:
+      # 测试环境也要用独立密钥，不能沿用代码里的默认值
+      CRM_SECRET_KEY: ${CRM_SECRET_KEY:-local-test-secret-please-override}
+      CRM_DATABASE_URL: sqlite:////data/crm.db
+      CRM_UPLOAD_DIR: /data/uploads
+      # 容器内启动时灌入演示账号，便于冒烟测试与人工验收
+      CRM_SEED_DEMO: "true"
+      CRM_PBKDF2_ITERATIONS: "100000"
+    volumes:
+      - crm-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)"
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+volumes:
+  crm-data:

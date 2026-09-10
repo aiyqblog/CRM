@@ -1,0 +1,30 @@
+# Ruff 配置
+#
+# 只启用「能抓到真问题」的规则集。默认全量规则里混着大量风格偏好与
+# 时区强制项（DTZ001 会要求所有 datetime 都带 tzinfo，而本项目刻意
+# 全库统一用 naive UTC，见 app/models/base.py 的说明）——
+# 规则噪声一大，团队就会开始习惯性忽略 lint 输出，那还不如不开。
+
+line-length = 100
+target-version = "py313"
+
+[lint]
+select = [
+    "E4",   # 导入相关错误
+    "E7",   # 语句层错误（如 ==/is 误用）
+    "E9",   # 运行时错误
+    "F",    # pyflakes：未使用的导入/变量、未定义名称
+    "W",    # pycodestyle 警告
+    "I",    # import 排序
+    "B",    # flake8-bugbear：常见逻辑陷阱
+]
+ignore = [
+    "E501",  # 行长由 formatter 负责，lint 不重复管
+    "B008",  # FastAPI 的 Form()/Depends() 作为默认值是标准写法，属误报
+    "E402",  # conftest.py 必须在导入 app 之前设置环境变量
+]
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "B011",  # 测试里刻意使用 assert False 的场景
+]

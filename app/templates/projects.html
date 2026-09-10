@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}销售项目{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">销售项目</h1>
+    <p class="page-sub">共 {{ total }} 个 · 八阶段流程，阶段推进需产出物齐备</p>
+  </div>
+  <div class="toolbar">
+    {% if stagnant_only %}
+    <a href="/projects" class="btn" data-testid="project-filter-all">全部项目</a>
+    {% else %}
+    <a href="/projects?stagnant_only=1" class="btn" data-testid="project-filter-stagnant">只看停滞</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2 class="card-title">阶段筛选</h2>
+  </div>
+  <div class="stagebar">
+    <a href="/projects" class="stagechip {{ 'current' if not active_stage else '' }}"
+       style="text-decoration:none">
+      <div class="name">全部</div>
+      <div class="rate">不限阶段</div>
+    </a>
+    {% for stage in STAGE_ORDER %}
+    <a href="/projects?stage={{ stage.value }}"
+       class="stagechip {{ 'current' if active_stage == stage.value else '' }}"
+       style="text-decoration:none" data-testid="stage-filter-{{ stage.value }}">
+      <div class="name">{{ STAGE_LABELS.get(stage.value) }}</div>
+      <div class="rate">{{ stage.value }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid grid-main">
+  <div class="card">
+    <div class="card-head"><h2 class="card-title">项目列表</h2></div>
+    <div class="card-body tight">
+      {% if projects %}
+      <table data-testid="project-table">
+        <thead>
+          <tr>
+            <th>项目编号</th><th>项目名称</th><th>客户</th><th>阶段</th>
+            <th class="num">赢率</th><th class="num">总营收</th><th>负责人</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in projects %}
+          <tr data-testid="project-row">
+            <td class="mono">{{ p.project_no }}</td>
+            <td><a href="/projects/{{ p.id }}" data-testid="project-link">{{ p.project_name }}</a></td>
+            <td class="muted">{{ p.customer.name if p.customer else '—' }}</td>
+            <td>
+              <span class="badge badge-brand">{{ STAGE_LABELS.get(p.stage_enum) }}</span>
+              {% if p.stage_stagnant %}<span class="badge badge-amber">停滞</span>{% endif %}
+            </td>
+            <td class="num">{{ p.win_rate }}%</td>
+            <td class="num">
+              {% if p.est_total_revenue %}￥{{ '{:,.0f}'.format(p.est_total_revenue) }}{% else %}—{% endif %}
+            </td>
+            <td class="muted">{{ p.owner.display_name if p.owner else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">暂无项目</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2 class="card-title">新建项目</h2></div>
+    <div class="card-body">
+      <form method="post" action="/projects" data-testid="project-form">
+        <div class="field">
+          <label for="project_name">项目名称 *</label>
+          <input id="project_name" name="project_name" required data-testid="project-name">
+        </div>
+        <div class="field">
+          <label for="customer_id">客户 *</label>
+          <select id="customer_id" name="customer_id" required data-testid="project-customer">
+            <option value="">请选择客户</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="project_type">项目类型</label>
+            <select id="project_type" name="project_type">
+              {% for key, label in PROJECT_TYPE_LABELS.items() %}
+              <option value="{{ key }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="channel_type">渠道</label>
+            <select id="channel_type" name="channel_type">
+              {% for key, label in CHANNEL_TYPE_LABELS.items() %}
+              <option value="{{ key }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="unit_price">预计单价（元）</label>
+            <input id="unit_price" name="unit_price" data-testid="project-price" placeholder="如 12.5">
+          </div>
+          <div class="field">
+            <label for="est_annual_qty">预计年用量（片）</label>
+            <input id="est_annual_qty" name="est_annual_qty" data-testid="project-qty" placeholder="如 100000">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="lifecycle_years">生命周期（年）</label>
+            <input id="lifecycle_years" name="lifecycle_years" placeholder="如 3">
+          </div>
+          <div class="field">
+            <label for="competitor">主要竞品</label>
+            <input id="competitor" name="competitor">
+          </div>
+        </div>
+        <div class="hint faint" style="margin:-4px 0 12px">
+          年营收 = 单价 × 年用量；总营收 = 年营收 × 生命周期
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit" data-testid="project-submit">创建项目</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

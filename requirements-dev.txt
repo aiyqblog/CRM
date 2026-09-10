@@ -1,0 +1,11 @@
+# 开发与测试依赖 —— 不进生产镜像
+-r requirements.txt
+
+# TestClient 依赖 httpx
+httpx>=0.27
+
+pytest>=8.3
+pytest-cov>=6.0
+playwright>=1.49
+pytest-playwright>=0.6
+ruff>=0.8

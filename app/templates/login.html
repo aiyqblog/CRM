@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}登录{% endblock %}
+
+{% block content %}
+<div class="login-card" data-page-node-id="jSa9k5ManFJnfcGZSAzBAU">
+  <h1 data-page-node-id="M31gwDUrYT3zOyRuAGFGhw">拜访与项目管理</h1>
+  <p class="sub" data-page-node-id="yOipavsfzmFp7DfHR6gMAE">请使用企业账号登录</p>
+
+  {% if flash %}
+  <div class="flash {{ flash_level }}" data-testid="login-error" data-page-node-id="fPBACYYejaRsYcVaF7jydz">{{ flash }}</div>
+  {% endif %}
+
+  <form method="post" action="/login" data-testid="login-form" data-page-node-id="cuBCyoJpiM3wO7erPHQHOo">
+    <div class="field" data-page-node-id="tFmzByPHwyJJYe5jjDZaaa">
+      <label for="username" data-page-node-id="KWuVoZ5idjtaG1fGxnXgY6">用户名</label>
+      <input id="username" name="username" autocomplete="username" required
+             data-testid="login-username" placeholder="例如 sales_a" data-page-node-id="mqb0DxpYvOl0KofUBNVTcb">
+    </div>
+    <div class="field" data-page-node-id="CrdqbXgTAf7jIBNlwgR69e">
+      <label for="password" data-page-node-id="CBp7uIdIe84FbtuAdN612a">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required
+             data-testid="login-password" data-page-node-id="DBEpIrkV8rSTEj18bdYJzH">
+    </div>
+    <button class="btn btn-primary" type="submit" data-testid="login-submit" data-page-node-id="IukLSql06qqZvv6B0yMhHF">登录</button>
+  </form>
+
+  <div class="demo-accounts" data-page-node-id="0FwEMY0ZDDr4oQ2Qj6JhJQ">
+    <div style="margin-bottom:6px" data-page-node-id="5ZyIIK8DugcUl2fk5qVjlE">演示账号（口令统一为 <code data-page-node-id="d5dC4FflihjBGH06puKi8t">crm123456</code>）：</div>
+    <div data-page-node-id="UaZXbJFD2yxJDPMgKaW9IL"><code data-page-node-id="NzrCKrCAcjIL5FMn1CdJDf">admin</code> 管理员 · <code data-page-node-id="072ANuorGqOgUznM00ZQ3D">director</code> 总监 · <code data-page-node-id="V9np51IhZ7jIS0WRklZ20C">manager_a</code> 华南主管</div>
+    <div data-page-node-id="KuZr71CSUgZAfQjMWClwXq"><code data-page-node-id="Xg78R5H4w6ZAK3Khy7I94g">sales_a</code> 王销售 · <code data-page-node-id="eDrLsCbOpFyJxHrvK8MtFT">sales_b</code> 孙销售（另一团队，用于越权验证）</div>
+  </div>
+</div>
+{% endblock %}

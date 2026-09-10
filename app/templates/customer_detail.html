@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title" data-testid="customer-title">{{ customer.name }}</h1>
+    <p class="page-sub">
+      {{ customer.code or '无编码' }}
+      {% if customer.industry %} · {{ customer.industry }}{% endif %}
+      {% if customer.level %} · {{ customer.level }} 级{% endif %}
+    </p>
+  </div>
+  <div class="toolbar">
+    <a href="/visits/new?customer_id={{ customer.id }}" class="btn btn-primary" data-testid="customer-checkin">发起拜访</a>
+    <a href="/customers" class="btn">返回列表</a>
+  </div>
+</div>
+
+<div class="grid grid-3" style="margin-bottom:16px">
+  <div class="metric">
+    <div class="metric-label">拜访记录</div>
+    <div class="metric-value" data-testid="customer-visit-count">{{ visits | length }}</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">销售项目</div>
+    <div class="metric-value" data-testid="customer-project-count">{{ projects | length }}</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">地址围栏</div>
+    <div class="metric-value small">
+      {% if has_coords %}<span class="badge badge-green">已登记坐标</span>
+      {% else %}<span class="badge badge-amber">缺坐标</span>{% endif %}
+    </div>
+    <div class="metric-hint">{{ customer.address or '未填写地址' }}</div>
+  </div>
+</div>
+
+<div class="grid grid-main">
+  <div class="card">
+    <div class="card-head">
+      <h2 class="card-title">拜访时间轴</h2>
+      <span class="faint" style="font-size:12px">按签到时间倒序</span>
+    </div>
+    <div class="timeline" data-testid="customer-timeline">
+      {% if visits %}
+        {% for v in visits %}
+        <div class="tl-item">
+          <div class="tl-dot {{ 'gray' if v.abnormal_flag }}"></div>
+          <div class="tl-body">
+            <div class="tl-head">
+              <span class="tl-title">
+                <a href="/visits/{{ v.id }}">{{ VISIT_TYPE_LABELS.get(v.visit_type, '拜访') }}</a>
+              </span>
+              <span class="tl-time">{{ v.checkin_time.strftime('%Y-%m-%d %H:%M') }}</span>
+              {% if v.duration_min is not none %}
+              <span class="badge badge-gray">{{ v.duration_min }} 分钟</span>
+              {% endif %}
+              {% if v.location_status == 1 %}<span class="badge badge-green">定位正常</span>
+              {% elif v.location_status == 2 %}<span class="badge badge-amber">超出范围</span>
+              {% elif v.location_status == 3 %}<span class="badge badge-gray">定位失败</span>
+              {% else %}<span class="badge badge-red">模拟位置</span>{% endif %}
+              {% if v.abnormal_flag %}<span class="badge badge-red">异常</span>{% endif %}
+            </div>
+            <div class="tl-text">{{ v.content or '（未填写纪要）' }}</div>
+            {% if v.next_action %}
+            <div class="tl-text faint" style="margin-top:3px">下一步：{{ v.next_action }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty">该客户暂无拜访记录</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">销售项目</h2></div>
+      <div class="card-body tight">
+        {% if projects %}
+        <table data-testid="customer-projects">
+          <thead><tr><th>项目</th><th>阶段</th><th class="num">赢率</th></tr></thead>
+          <tbody>
+            {% for p in projects %}
+            <tr>
+              <td><a href="/projects/{{ p.id }}">{{ p.project_name }}</a></td>
+              <td>
+                <span class="badge badge-brand">{{ STAGE_LABELS.get(p.stage_enum) }}</span>
+                {% if p.stage_stagnant %}<span class="badge badge-amber">停滞</span>{% endif %}
+              </td>
+              <td class="num">{{ p.win_rate }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">该客户暂无销售项目</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">客户信息</h2></div>
+      <div class="card-body">
+        <dl class="dl">
+          <dt>负责人</dt><dd>{{ customer.owner.display_name if customer.owner else '—' }}</dd>
+          <dt>联系人</dt><dd>{{ customer.contact_name or '—' }}</dd>
+          <dt>联系电话</dt><dd class="mono">{{ customer.contact_phone or '—' }}</dd>
+          <dt>地址</dt><dd>{{ customer.address or '—' }}</dd>
+          <dt>坐标</dt>
+          <dd class="mono">
+            {% if has_coords %}{{ '%.5f'|format(customer.latitude) }}, {{ '%.5f'|format(customer.longitude) }}{% else %}—{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

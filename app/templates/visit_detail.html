@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}{{ record.record_no }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title" data-testid="visit-title">{{ record.record_no }}</h1>
+    <p class="page-sub">
+      {{ record.customer.name if record.customer else '—' }}
+      · {{ record.owner.display_name if record.owner else '—' }}
+      · {{ VISIT_TYPE_LABELS.get(record.visit_type, '—') }}
+    </p>
+  </div>
+  <div class="toolbar">
+    {% if record.status == 2 %}<span class="badge badge-blue">进行中</span>
+    {% elif record.status == 3 %}<span class="badge badge-green">已完成</span>
+    {% else %}<span class="badge badge-gray">已自动关闭</span>{% endif %}
+    {% if record.abnormal_flag %}<span class="badge badge-red">异常</span>{% endif %}
+    <a href="/visits" class="btn">返回列表</a>
+  </div>
+</div>
+
+{% if record.abnormal_flag %}
+<div class="flash warn" data-testid="visit-abnormal">
+  该记录已标记异常：{{ record.abnormal_reason }}
+</div>
+{% endif %}
+
+<div class="grid grid-main">
+  <div>
+    {% if record.status == 2 %}
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">签退并提交</h2></div>
+      <div class="card-body">
+        <form method="post" action="/visits/{{ record.id }}/checkout" data-testid="checkout-form">
+          <div class="field">
+            <label for="content">拜访纪要 *（至少 20 字）</label>
+            <textarea id="content" name="content" required data-testid="checkout-content"
+                      placeholder="本次沟通内容、客户关注点、达成的共识…"></textarea>
+            <div class="hint">字数不足会被 R-11 拦截</div>
+          </div>
+
+          {% if record.location_status == 2 %}
+          <div class="field">
+            <label for="location_note">位置说明 *（签到点超出客户围栏）</label>
+            <input id="location_note" name="location_note" data-testid="checkout-location-note"
+                   placeholder="例如：客户临时改到分公司会议室">
+            <div class="hint">R-03 要求：超出围栏必须说明</div>
+          </div>
+          {% endif %}
+
+          <div class="field">
+            <label for="customer_feedback">客户反馈</label>
+            <textarea id="customer_feedback" name="customer_feedback" style="min-height:64px"></textarea>
+          </div>
+          <div class="field">
+            <label for="next_action">下一步计划</label>
+            <input id="next_action" name="next_action" data-testid="checkout-next">
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit" data-testid="checkout-submit">提交签退</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">拜访纪要</h2></div>
+      <div class="card-body">
+        <div style="white-space:pre-wrap" data-testid="visit-content">{{ record.content }}</div>
+        {% if record.customer_feedback %}
+        <div style="margin-top:14px">
+          <div class="faint" style="font-size:12px;margin-bottom:4px">客户反馈</div>
+          <div>{{ record.customer_feedback }}</div>
+        </div>
+        {% endif %}
+        {% if record.next_action %}
+        <div style="margin-top:14px">
+          <div class="faint" style="font-size:12px;margin-bottom:4px">下一步计划</div>
+          <div>{{ record.next_action }}</div>
+        </div>
+        {% endif %}
+        {% if record.location_note %}
+        <div style="margin-top:14px">
+          <div class="faint" style="font-size:12px;margin-bottom:4px">位置说明</div>
+          <div>{{ record.location_note }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">签到信息</h2></div>
+      <div class="card-body">
+        <dl class="dl">
+          <dt>签到时间</dt><dd class="mono">{{ record.checkin_time.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+          <dt>签退时间</dt>
+          <dd class="mono">{{ record.checkout_time.strftime('%Y-%m-%d %H:%M:%S') if record.checkout_time else '—' }}</dd>
+          <dt>拜访时长</dt>
+          <dd>{% if record.duration_min is not none %}{{ record.duration_min }} 分钟{% else %}—{% endif %}</dd>
+          <dt>签到地址</dt><dd>{{ record.checkin_address }}</dd>
+          <dt>签到坐标</dt>
+          <dd class="mono">{{ '%.5f'|format(record.checkin_lat) }}, {{ '%.5f'|format(record.checkin_lng) }}</dd>
+          <dt>定位状态</dt>
+          <dd>
+            {% if record.location_status == 1 %}<span class="badge badge-green">正常</span>
+            {% elif record.location_status == 2 %}<span class="badge badge-amber">超出范围</span>
+            {% elif record.location_status == 3 %}<span class="badge badge-gray">定位失败</span>
+            {% else %}<span class="badge badge-red">模拟位置</span>{% endif %}
+            {% if record.distance_m is not none %}
+            <span class="faint" style="font-size:12px">距客户 {{ record.distance_m }} 米</span>
+            {% endif %}
+          </dd>
+          <dt>同步状态</dt>
+          <dd>{% if record.sync_status == 1 %}已同步{% else %}<span class="badge badge-amber">待同步</span>{% endif %}</dd>
+          <dt>关联项目</dt>
+          <dd>
+            {% if record.project %}
+            <a href="/projects/{{ record.project.id }}">{{ record.project.project_name }}</a>
+            {% else %}—{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    {% if record.attachments %}
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">附件（{{ record.attachments | length }}）</h2></div>
+      <div class="card-body">
+        {% for a in record.attachments %}
+        <div class="gate-item">
+          <div class="gate-body">
+            <div class="gate-name">{{ a.file_url.split('/')[-1] }}</div>
+            <div class="gate-meta">
+              {{ a.file_size }} 字节
+              {% if a.captured_at %} · 拍摄 {{ a.captured_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+            </div>
+            {% if a.watermark %}<div class="gate-meta mono">{{ a.watermark }}</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}销售漏斗{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">销售漏斗</h1>
+    <p class="page-sub">数据生成于 {{ generated_at.strftime('%Y-%m-%d %H:%M') }}</p>
+  </div>
+  <a href="/projects" class="btn">返回项目列表</a>
+</div>
+
+{% set max_count = stages | map(attribute='count') | max %}
+{% set total_count = stages | sum(attribute='count') %}
+{% set total_weighted = stages | sum(attribute='weighted_revenue') %}
+
+<div class="grid grid-3" style="margin-bottom:16px">
+  <div class="metric">
+    <div class="metric-label">进行中项目</div>
+    <div class="metric-value" data-testid="funnel-total">{{ total_count }}</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">加权预计营收</div>
+    <div class="metric-value small">￥{{ '{:,.0f}'.format(total_weighted) }}</div>
+    <div class="metric-hint">按各阶段赢率加权</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">停滞项目</div>
+    <div class="metric-value" data-testid="funnel-stagnant">
+      {{ stages | sum(attribute='stagnant') }}
+    </div>
+    <div class="metric-hint">停留超过典型周期 1.5 倍</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2 class="card-title">各阶段分布</h2>
+    <span class="faint" style="font-size:12px">条长代表项目数量，数字为该阶段金额合计</span>
+  </div>
+  <div class="card-body" data-testid="funnel-chart">
+    {% for s in stages %}
+    <div class="funnel-row">
+      <div class="funnel-label">
+        {{ s.label }}
+        <div class="faint" style="font-size:11px">赢率 {{ s.win_rate }}%</div>
+      </div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar"
+             style="width: {{ (s.count / max_count * 100) if max_count else 0 }}%"></div>
+      </div>
+      <div class="funnel-nums">
+        <div><strong>{{ s.count }}</strong> 个
+          {% if s.stagnant %}<span class="badge badge-amber">停滞 {{ s.stagnant }}</span>{% endif %}
+        </div>
+        <div class="faint">
+          {% if s.total_revenue %}￥{{ '{:,.0f}'.format(s.total_revenue) }}{% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2 class="card-title">阶段明细</h2></div>
+  <div class="card-body tight">
+    <table>
+      <thead>
+        <tr>
+          <th>阶段</th><th class="num">赢率</th><th class="num">典型周期</th>
+          <th class="num">项目数</th><th class="num">金额合计</th>
+          <th class="num">加权营收</th><th class="num">停滞</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stages %}
+        <tr>
+          <td>{{ s.label }}</td>
+          <td class="num">{{ s.win_rate }}%</td>
+          <td class="num">{{ s.typical_days }} 天</td>
+          <td class="num">{{ s.count }}</td>
+          <td class="num">
+            {% if s.total_revenue %}￥{{ '{:,.0f}'.format(s.total_revenue) }}{% else %}—{% endif %}
+          </td>
+          <td class="num">
+            {% if s.weighted_revenue %}￥{{ '{:,.0f}'.format(s.weighted_revenue) }}{% else %}—{% endif %}
+          </td>
+          <td class="num">
+            {% if s.stagnant %}<span class="badge badge-amber">{{ s.stagnant }}</span>{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

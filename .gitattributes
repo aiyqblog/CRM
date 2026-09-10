@@ -1,0 +1,28 @@
+# 统一换行符：开发在 Windows，CI 与容器在 Linux。
+# 不固定的话，每次跨平台 checkout 都会产生大量"整文件变更"的假 diff，
+# 把真正的改动淹没掉，code review 时极其痛苦。
+* text=auto eol=lf
+
+# 二进制文件不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.db binary
+*.sqlite3 binary
+*.woff binary
+*.woff2 binary
+
+# 这些文件必须保持 LF，否则容器内执行会报 bad interpreter
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+.gitlab-ci.yml text eol=lf
+
+# Windows 批处理必须保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 语言统计时排除，避免生成文件压过真实代码
+ci-logs/** linguist-generated=true
+coverage.json linguist-generated=true

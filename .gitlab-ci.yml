@@ -1,0 +1,132 @@
+# GitLab CI 流水线
+#
+# 与 ci/run_pipeline.py 的阶段划分严格一致 —— 本地绿、CI 红这类不一致
+# 比没有本地流水线更糟，因为会让人不再信任本地结果。
+#
+# 【内网部署前必须确认三件事】（详见 ci/README.md）
+#   1. 镜像仓库代理：下面的 image 都要能内网拉取，否则换成 Harbor 地址
+#   2. pip 私有源：见 PIP_INDEX_URL
+#   3. Playwright 浏览器：见 PLAYWRIGHT_DOWNLOAD_HOST
+# 这三条是网络可达性问题，不是配置技巧问题，不解决流水线第一步就过不去。
+
+stages:
+  - lint
+  - test
+  - e2e
+  - build
+  - deploy
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHONPATH: "$CI_PROJECT_DIR"
+  # 内网环境改成私有源，例如 http://nexus.internal/repository/pypi/simple
+  PIP_INDEX_URL: "https://pypi.org/simple"
+  # Playwright 浏览器下载走镜像，避免直连官方 CDN 超时
+  PLAYWRIGHT_DOWNLOAD_HOST: ""
+  # 测试环境口令散列轮数：CI 里用默认的 60 万轮会让每个测试多花数秒
+  CRM_PBKDF2_ITERATIONS: "1000"
+
+default:
+  # 【镜像选型】生产与测试统一 3.13，避免「本地 3.13 / CI 3.11」这类隐性差异
+  image: python:3.13-slim
+  cache:
+    key:
+      files:
+        - requirements.txt
+        - requirements-dev.txt
+    paths:
+      - .cache/pip
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r requirements-dev.txt
+
+# ---------------------------------------------------------------------------
+# 静态检查
+# ---------------------------------------------------------------------------
+lint:ruff:
+  stage: lint
+  script:
+    - ruff check app tests ci
+  allow_failure: false
+
+# ---------------------------------------------------------------------------
+# 测试
+# ---------------------------------------------------------------------------
+test:unit:
+  stage: test
+  script:
+    - pytest tests/unit -q --no-header --junitxml=report-unit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report-unit.xml
+    expire_in: 1 week
+
+test:api:
+  stage: test
+  script:
+    - pytest tests/api -q --no-header --junitxml=report-api.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report-api.xml
+    expire_in: 1 week
+
+# ---------------------------------------------------------------------------
+# 端到端
+# ---------------------------------------------------------------------------
+# 用官方 Playwright 镜像：它把浏览器二进制和一堆系统库（字体/图形/音频）
+# 全都装好了。自己拼这一步非常痛苦，而且失败信息通常毫无指向性。
+e2e:playwright:
+  stage: e2e
+  image: mcr.microsoft.com/playwright/python:v1.49.0-jammy
+  variables:
+    CRM_E2E_BROWSER_CHANNEL: "chromium"
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r requirements-dev.txt
+  script:
+    # --tracing=retain-on-failure：失败时留下完整执行现场（DOM 快照/网络/控制台），
+    # 这是自动定位根因能成立的前提，比一句「第 N 行断言失败」有用得多
+    - pytest tests/e2e -q --no-header -m e2e --tracing=retain-on-failure --junitxml=report-e2e.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report-e2e.xml
+    paths:
+      - test-results/
+    expire_in: 1 week
+
+# ---------------------------------------------------------------------------
+# 构建
+# ---------------------------------------------------------------------------
+build:image:
+  stage: build
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+
+# ---------------------------------------------------------------------------
+# 部署到测试环境
+# ---------------------------------------------------------------------------
+# 注意：只自动部署到测试环境。生产发布必须人工放行 ——
+# 数据迁移不可逆、缺少回滚窗口、且需要变更审批留痕。
+deploy:test:
+  stage: deploy
+  image: docker:27-cli
+  environment:
+    name: test
+    url: http://crm-test.internal:18080
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - docker compose up -d --force-recreate
+    - sleep 5
+    - python ci/smoke_test.py --base-url http://crm-test.internal:18080

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}客户{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">客户</h1>
+    <p class="page-sub">共 {{ customers | length }} 个可见客户</p>
+  </div>
+  <form class="toolbar" method="get" action="/customers">
+    <input name="keyword" value="{{ keyword }}" placeholder="按名称搜索"
+           style="padding:8px 11px;border:1px solid var(--border-strong);border-radius:6px;font-size:13px;font-family:inherit">
+    <button class="btn" type="submit">搜索</button>
+  </form>
+</div>
+
+<div class="grid grid-main">
+  <div class="card">
+    <div class="card-head"><h2 class="card-title">客户列表</h2></div>
+    <div class="card-body tight">
+      {% if customers %}
+      <table data-testid="customer-table">
+        <thead>
+          <tr><th>客户名称</th><th>编码</th><th>行业</th><th>级别</th><th>联系人</th><th>负责人</th></tr>
+        </thead>
+        <tbody>
+          {% for c in customers %}
+          <tr data-testid="customer-row">
+            <td><a href="/customers/{{ c.id }}" data-testid="customer-link">{{ c.name }}</a></td>
+            <td class="mono muted">{{ c.code or '—' }}</td>
+            <td class="muted">{{ c.industry or '—' }}</td>
+            <td>{% if c.level %}<span class="badge badge-blue">{{ c.level }}</span>{% else %}—{% endif %}</td>
+            <td class="muted">{{ c.contact_name or '—' }}</td>
+            <td class="muted">{{ c.owner.display_name if c.owner else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">暂无客户</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div>
+    {% if can_create %}
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">新建客户</h2></div>
+      <div class="card-body">
+        <form method="post" action="/customers" data-testid="customer-form">
+          <div class="field">
+            <label for="name">客户名称 *</label>
+            <input id="name" name="name" required data-testid="customer-name">
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="industry">行业</label>
+              <input id="industry" name="industry" placeholder="如 智能穿戴">
+            </div>
+            <div class="field">
+              <label for="level">级别</label>
+              <select id="level" name="level">
+                <option value="">未分级</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="address">地址</label>
+            <input id="address" name="address" placeholder="用于拜访围栏判定">
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="contact_name">联系人</label>
+              <input id="contact_name" name="contact_name">
+            </div>
+            <div class="field">
+              <label for="contact_phone">联系电话</label>
+              <input id="contact_phone" name="contact_phone">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit" data-testid="customer-submit">创建客户</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="card"><div class="card-body muted">当前角色为只读，无法新建客户。</div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

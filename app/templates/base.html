@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CRM{% endblock %} · 拜访与项目管理</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+</head>
+<body>
+{% if not hide_nav %}
+{% set path = request.url.path %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/" data-testid="brand">
+      <span class="brand-mark"></span>
+      <span>拜访与项目管理</span>
+    </a>
+    <nav class="nav">
+      <a href="/" class="{{ 'active' if path == '/' else '' }}" data-testid="nav-dashboard">看板</a>
+      <a href="/customers" class="{{ 'active' if path.startswith('/customers') else '' }}" data-testid="nav-customers">客户</a>
+      <a href="/visits" class="{{ 'active' if path.startswith('/visits') else '' }}" data-testid="nav-visits">拜访</a>
+      <a href="/projects" class="{{ 'active' if path.startswith('/projects') else '' }}" data-testid="nav-projects">销售项目</a>
+      <a href="/funnel" class="{{ 'active' if path == '/funnel' else '' }}" data-testid="nav-funnel">销售漏斗</a>
+    </nav>
+    {% if current_user %}
+    <div class="userbox">
+      <span data-testid="current-user">{{ current_user.display_name }}</span>
+      <span class="badge badge-gray">{{ ROLE_LABELS.get(current_user.role_enum, current_user.role) }}</span>
+      <a href="/logout" class="btn btn-sm" data-testid="logout">退出</a>
+    </div>
+    {% endif %}
+  </div>
+</header>
+{% endif %}
+
+<main class="{% if hide_nav %}login-wrap{% else %}container{% endif %}">
+  {% if flash and not hide_nav %}
+  <div class="flash {{ flash_level }}" data-testid="flash">{{ flash }}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<script src="{{ url_for('static', path='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

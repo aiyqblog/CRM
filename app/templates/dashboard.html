@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}看板{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">工作看板</h1>
+    <p class="page-sub">拜访数据仅用于过程管理，不纳入绩效考核</p>
+  </div>
+  <div class="toolbar">
+    <a href="/visits/new" class="btn btn-primary" data-testid="quick-checkin">发起拜访</a>
+    <a href="/projects" class="btn" data-testid="quick-project">新建项目</a>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="metric">
+    <div class="metric-label">拜访记录总数</div>
+    <div class="metric-value" data-testid="metric-visits">{{ metrics.visit_total }}</div>
+    <div class="metric-hint">我可见范围内</div>
+  </div>
+  <div class="metric {{ 'alert' if metrics.abnormal_count }}">
+    <div class="metric-label">待复核异常拜访</div>
+    <div class="metric-value" data-testid="metric-abnormal">{{ metrics.abnormal_count }}</div>
+    <div class="metric-hint">时长过短 / 定位异常 / 时间漂移</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">进行中项目</div>
+    <div class="metric-value" data-testid="metric-projects">{{ metrics.project_count }}</div>
+    <div class="metric-hint">其中停滞 {{ metrics.stagnant_count }} 个</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">在跟进项目总营收</div>
+    <div class="metric-value small" data-testid="metric-revenue">
+      ￥{{ '{:,.0f}'.format(metrics.weighted_revenue) }}
+    </div>
+    <div class="metric-hint">单价 × 年用量 × 生命周期</div>
+  </div>
+</div>
+
+<div class="grid grid-main">
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">最近拜访</h2>
+        <a href="/visits" class="btn btn-sm btn-ghost">全部记录 →</a>
+      </div>
+      <div class="card-body tight">
+        {% if recent_visits %}
+        <table data-testid="recent-visits">
+          <thead>
+            <tr>
+              <th>客户</th><th>拜访人</th><th>签到时间</th><th>时长</th><th>定位</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in recent_visits %}
+            <tr>
+              <td>{{ v.customer.name if v.customer else '-' }}</td>
+              <td class="muted">{{ v.owner.display_name if v.owner else v.owner_id }}</td>
+              <td class="mono nowrap">{{ v.checkin_time.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td class="num">{{ v.duration_min if v.duration_min is not none else '—' }}</td>
+              <td>
+                {% if v.location_status == 1 %}<span class="badge badge-green">正常</span>
+                {% elif v.location_status == 2 %}<span class="badge badge-amber">超出范围</span>
+                {% elif v.location_status == 3 %}<span class="badge badge-gray">定位失败</span>
+                {% else %}<span class="badge badge-red">模拟位置</span>{% endif %}
+                {% if v.abnormal_flag %}<span class="badge badge-red">异常</span>{% endif %}
+              </td>
+              <td><a href="/visits/{{ v.id }}">查看</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">还没有拜访记录</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">进行中的销售项目</h2>
+        <a href="/projects" class="btn btn-sm btn-ghost">全部项目 →</a>
+      </div>
+      <div class="card-body tight">
+        {% if projects %}
+        <table data-testid="dashboard-projects">
+          <thead>
+            <tr><th>项目</th><th>客户</th><th>阶段</th><th class="num">赢率</th><th class="num">总营收</th></tr>
+          </thead>
+          <tbody>
+            {% for p in projects %}
+            <tr>
+              <td><a href="/projects/{{ p.id }}">{{ p.project_name }}</a></td>
+              <td class="muted">{{ p.customer.name if p.customer else '-' }}</td>
+              <td>
+                <span class="badge badge-brand">{{ STAGE_LABELS.get(p.stage_enum) }}</span>
+                {% if p.stage_stagnant %}<span class="badge badge-amber">停滞</span>{% endif %}
+              </td>
+              <td class="num">{{ p.win_rate }}%</td>
+              <td class="num">
+                {% if p.est_total_revenue %}￥{{ '{:,.0f}'.format(p.est_total_revenue) }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">还没有进行中的项目</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">销售漏斗</h2>
+        <a href="/funnel" class="btn btn-sm btn-ghost">详情 →</a>
+      </div>
+      <div class="card-body">
+        {% set max_count = funnel | map(attribute='count') | max %}
+        {% for s in funnel %}
+        <div class="funnel-row" style="border:none;padding:6px 0">
+          <div class="funnel-label">{{ s.label }}</div>
+          <div class="funnel-bar-wrap">
+            <div class="funnel-bar"
+                 style="width: {{ (s.count / max_count * 100) if max_count else 0 }}%"></div>
+          </div>
+          <div class="funnel-nums" style="width:64px">{{ s.count }} 个</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2 class="card-title">阶段基准</h2></div>
+      <div class="card-body">
+        <div class="muted" style="font-size:12px;line-height:1.9">
+          阶段推进需产出物齐备，缺项须主管审批覆盖。<br>
+          停留超过典型周期 1.5 倍自动标记停滞。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
