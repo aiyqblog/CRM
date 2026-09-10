@@ -76,8 +76,21 @@ LABEL_BLOCKED = "agent:blocked"      # 自动化失败，需人工介入
 #: 带这些标签的 Issue 一律跳过 —— 它们需要人的判断，不是代码问题
 LABEL_SKIP = {"agent:blocked", "needs-design", "question", "wontfix"}
 
-BRANCH_PREFIX = "agent/issue-"
+#: 分支前缀。**刻意不含斜杠。**
+#:
+#: 原先是 ``agent/issue-``，但本机环境下 git 无法在 ``.git/refs/heads/`` 下
+#: 创建子目录 —— ``git update-ref refs/heads/agent/issue-2`` 会返回 0 却什么也不写，
+#: 还会把刚建好的目录一起删掉，分支因此永远处于"未出生"状态，后续 commit 变成孤儿提交。
+#: 而单层引用（``refs/heads/agent-issue-2``）完全正常。
+#:
+#: 这不只是本地开发的问题：自动化用的是同一套环境，嵌套分支名会让整条链路静默失效。
+#: 用扁平命名换取可靠性，代价仅是分支名里少一个斜杠。
+BRANCH_PREFIX = "agent-issue-"
 BASE_BRANCH = "main"
+
+#: 单条 git 命令的最长等待时间。联网操作（fetch/push）在此之内没结果就中止，
+#: 避免自动化在无人值守时无声挂起。
+_GIT_TIMEOUT = 180
 
 
 class FlowError(Exception):
@@ -155,7 +168,13 @@ def api(
 # git
 # ==========================================================================
 def _git(*args: str, check: bool = True, use_token: bool = False) -> subprocess.CompletedProcess:
-    command = ["git"]
+    # 一律禁用凭据助手。
+    #
+    # 本机全局配置了 ``credential.helper = helper-selector``，它在拿不到凭据时会
+    # **卡住等待**——实测挂满 60 秒才超时，而且 stderr 是空的，自动化表现为
+    # 「进程被外部杀掉、什么都没输出」，排查时毫无线索。
+    # 凭据统一由 ``http.extraheader`` 显式传入，不需要也不该让助手介入。
+    command = ["git", "-c", "credential.helper="]
     if use_token:
         # 通过 extraheader 传凭据，token 不会写进 .git/config
         credential = base64.b64encode(
@@ -164,23 +183,36 @@ def _git(*args: str, check: bool = True, use_token: bool = False) -> subprocess.
         command += ["-c", f"http.extraheader=AUTHORIZATION: basic {credential}"]
 
     command += list(args)
-    result = subprocess.run(  # noqa: S603
-        command,
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+
+    # 关掉一切交互式提示，配合上面的 helper 禁用，确保任何失败都在秒级返回。
+    env = {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GCM_INTERACTIVE": "Never",
+        "GIT_ASKPASS": "",
+    }
+    try:
+        result = subprocess.run(  # noqa: S603
+            command,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=_GIT_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise FlowError(
+            f"git {' '.join(args)} 超过 {_GIT_TIMEOUT}s 无响应，已中止。\n"
+            "  通常是网络/代理不通。本机 git 走 HTTP_PROXY，代理异常时会返回 502。"
+        ) from None
+
     if check and result.returncode != 0:
         raise FlowError(
             f"git {' '.join(args)} 失败（rc={result.returncode}）：\n{result.stderr.strip()}"
         )
     return result
-
-
-def git(*args: str) -> subprocess.CompletedProcess:
-    return _git(*args)
 
 
 def current_branch() -> str:
@@ -412,7 +444,15 @@ def cmd_claim(args) -> int:
 
     branch = branch_for(issue)
 
-    _git("fetch", "origin", BASE_BRANCH)
+    # fetch 只为刷新旧 ref，失败不该阻断任务 —— 本地已有 origin/<base> 可直接开分支。
+    # 本机 git 走 HTTP_PROXY，代理偶发 502，因一次抖动就让整个 Issue 处理失败太脆。
+    fetched = _git("fetch", "origin", BASE_BRANCH, use_token=True, check=False)
+    if fetched.returncode != 0:
+        detail = fetched.stderr.strip().splitlines()
+        print(f"  ! 拉取 {BASE_BRANCH} 失败，改用本地已有的 origin/{BASE_BRANCH} 开分支")
+        if detail:
+            print(f"    {detail[-1][:120]}")
+
     _git("checkout", "-B", branch, f"origin/{BASE_BRANCH}")
 
     set_labels(number, add=[LABEL_WORKING], remove=[LABEL_QUEUED])
