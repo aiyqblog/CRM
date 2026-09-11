@@ -25,7 +25,8 @@ pytestmark = pytest.mark.api
 
 #: 任何形如 "VisitType.ROUTINE" / "ProjectStage.WON" 的值都是坏的
 ENUM_REPR_PATTERN = re.compile(
-    r"^(VisitType|ProjectType|ChannelType|ProjectStage|Role|PlanStatus|LocationStatus)\."
+    r"^(VisitType|ProjectType|ProjectCategory|ChannelType|ProjectStage|Role"
+    r"|PlanStatus|LocationStatus)\."
 )
 
 
@@ -91,6 +92,51 @@ def test_stage_filter_links_use_plain_values(client, customer_id):
     assert hrefs
     _assert_no_enum_repr(hrefs, "阶段筛选")
     assert "opportunity" in hrefs
+
+
+def test_project_category_options_are_plain(client, customer_id):
+    """Issue #5：项目类别下拉渲染的必须是 1/2 这类裸值。"""
+    _login_form(client)
+    html = client.get("/projects").text
+
+    block = re.findall(
+        r'<select[^>]*name="project_category"[^>]*>(.*?)</select>', html, re.S
+    )
+    assert block, "未找到项目类别下拉框"
+    values = _option_values(block[0])
+    _assert_no_enum_repr(values, "项目类别")
+    assert set(values) == {"1", "2"}
+    assert "大型项目" in block[0] and "小型项目" in block[0]
+
+
+def test_product_series_options_match_server_side_list(client, customer_id):
+    """产品系列下拉的选项必须与服务端清单完全一致。
+
+    两者一旦漂移，用户会在页面上选到一个服务端不认的系列，
+    提交时收到一个看起来莫名其妙的 R-31。
+    """
+    from app.constants import PRODUCT_SERIES_MODELS
+
+    _login_form(client)
+    html = client.get("/projects").text
+
+    block = re.findall(r'<select[^>]*name="product_series"[^>]*>(.*?)</select>', html, re.S)
+    assert block, "未找到产品系列下拉框"
+
+    rendered = [v for v in _option_values(block[0]) if v]
+    assert rendered == list(PRODUCT_SERIES_MODELS)
+
+
+def test_product_model_options_start_empty(client, customer_id):
+    """型号下拉由前端联动填充：初始必须是空占位，不能预先塞满某个系列的型号。"""
+    _login_form(client)
+    html = client.get("/projects").text
+
+    block = re.findall(r'<select[^>]*name="product_model"[^>]*>(.*?)</select>', html, re.S)
+    assert block, "未找到产品型号下拉框"
+
+    assert _option_values(block[0]) == [""]
+    assert "请先选择产品系列" in block[0]
 
 
 def test_checkin_form_submits_values_the_api_accepts(client, customer_id):

@@ -209,6 +209,55 @@ PROJECT_TYPE_LABELS: dict[ProjectType, str] = {
 }
 
 
+class ProjectCategory(int, Enum):
+    """项目类别（Issue #5）。
+
+    注意与 :class:`ProjectType` 区分：项目类型说的是「这个项目在干什么」
+    （新导入 / 替换竞品 / 扩容 / 维护），项目类别说的是「这个项目多大」。
+    两者是独立维度，不是同一个字段的别名。
+    """
+
+    LARGE = 1  # 大型项目
+    SMALL = 2  # 小型项目
+
+
+PROJECT_CATEGORY_LABELS: dict[ProjectCategory, str] = {
+    ProjectCategory.LARGE: "大型项目",
+    ProjectCategory.SMALL: "小型项目",
+}
+
+#: 新建项目时表单默认选中的类别；也是存量数据回填用的值（Issue #5）。
+DEFAULT_PROJECT_CATEGORY = ProjectCategory.SMALL
+
+#: 产品系列 → 可选型号（Issue #5）。R-31：型号必须隶属所选系列。
+#: 这里是唯一数据源 —— 前端联动下拉与服务端校验都读它，避免两处清单漂移。
+PRODUCT_SERIES_MODELS: dict[str, tuple[str, ...]] = {
+    "5G/4G蜂窝天线": (
+        "YECT005W1A",
+        "YECT004W1A",
+        "YECT028W1A",
+        "YECT003W1A",
+    ),
+    "GNSS定位天线": (
+        "YFGC007E3A",
+        "YFGD000AA",
+        "YFGD000BA",
+        "YEGB000Q1A",
+        "YEGN000Q1A",
+        "YEGT000W8A",
+    ),
+    "卫星通信天线": (
+        "YFTA009E3AM",
+        "YEGM023AA",
+    ),
+    "Wi-Fi/蓝牙/LoRa天线": (
+        "YFNF868F3AM",
+        "YFNF915F3AM",
+        "YFBC001WWA",
+    ),
+}
+
+
 class CloseType(int, Enum):
     WON = 1      # 赢单
     LOST = 2     # 输单

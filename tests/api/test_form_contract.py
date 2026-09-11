@@ -323,3 +323,98 @@ def test_project_form_amounts_are_persisted(client, customer_id):
     assert detail["project_type"] == 2
     assert detail["channel_type"] == 3
     assert detail["competitor"] == "竞品 Z"
+
+
+def test_project_new_fields_are_persisted(client, customer_id):
+    """Issue #5 新增栏位的字段名必须真的被后端收到。
+
+    比「通用交叉校验」更强一层：交叉校验只能证明名字没写错，
+    这里证明的是「值真的走到了库里」。名字写错时 FastAPI 只取默认值、
+    不报错，字段会静静变成空 —— 只有把值读回来才看得见。
+    """
+    _login(client)
+    response = client.post(
+        "/projects",
+        data={
+            "project_name": "契约新字段项目",
+            "customer_id": str(customer_id),
+            "project_type": "1",
+            "channel_type": "1",
+            "project_category": "2",
+            "product_series": "GNSS定位天线",
+            "product_model": "YEGB000Q1A",
+            "expected_dwin_date": "2026-11-20",
+        },
+    )
+    assert response.status_code == 303
+    project_id = int(response.headers["location"].split("/")[2].split("?")[0])
+
+    detail = client.get(f"/api/projects/{project_id}").json()
+    assert detail["project_category"] == 2
+    assert detail["project_category_label"] == "小型项目"
+    assert detail["product_series"] == "GNSS定位天线"
+    assert detail["product_model"] == "YEGB000Q1A"
+    assert detail["expected_dwin_date"] == "2026-11-20"
+
+
+def test_project_new_fields_are_optional_from_form(client, customer_id):
+    """四个新栏位都允许留空 —— 表单不填也必须能建项目。"""
+    _login(client)
+    response = client.post(
+        "/projects",
+        data={
+            "project_name": "契约空新字段项目",
+            "customer_id": str(customer_id),
+            "project_type": "1",
+            "channel_type": "1",
+            "project_category": "",
+            "product_series": "",
+            "product_model": "",
+            "expected_dwin_date": "",
+        },
+    )
+    assert response.status_code == 303
+    project_id = int(response.headers["location"].split("/")[2].split("?")[0])
+
+    detail = client.get(f"/api/projects/{project_id}").json()
+    assert detail["project_category"] is None
+    assert detail["product_series"] is None
+    assert detail["product_model"] is None
+    assert detail["expected_dwin_date"] is None
+
+
+def test_project_form_rejects_mismatched_model(client, customer_id):
+    """表单层同样要挡跨系列型号 —— 前端联动被绕过时的兜底。"""
+    _login(client)
+    response = client.post(
+        "/projects",
+        data={
+            "project_name": "契约错配项目",
+            "customer_id": str(customer_id),
+            "project_type": "1",
+            "channel_type": "1",
+            "product_series": "卫星通信天线",
+            "product_model": "YECT005W1A",
+        },
+    )
+
+    assert response.status_code == 303
+    assert "R-31" in response.headers["location"]
+
+
+def test_project_form_rejects_bad_date(client, customer_id):
+    """日期格式非法时给出 R-32，而不是静默丢字段。"""
+    _login(client)
+    response = client.post(
+        "/projects",
+        data={
+            "project_name": "契约坏日期项目",
+            "customer_id": str(customer_id),
+            "project_type": "1",
+            "channel_type": "1",
+            "expected_dwin_date": "2026/11/20",
+        },
+    )
+
+    assert response.status_code == 303
+    assert "R-32" in response.headers["location"]
