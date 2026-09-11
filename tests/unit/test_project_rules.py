@@ -7,7 +7,15 @@ from decimal import Decimal
 
 import pytest
 
-from app.services.project import check_amount_change, compute_revenue, evaluate_stay_days
+from app.constants import PRODUCT_SERIES_MODELS, ProjectCategory
+from app.services.errors import ValidationFailed
+from app.services.project import (
+    check_amount_change,
+    check_product_selection,
+    check_project_category,
+    compute_revenue,
+    evaluate_stay_days,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -109,3 +117,98 @@ class TestStayDays:
         start = datetime(2026, 9, 10, 10, 0)
         now = datetime(2026, 9, 9, 10, 0)
         assert evaluate_stay_days(start, now) == 0
+
+
+class TestCheckProjectCategory:
+    """R-31：项目类别取值（Issue #5）。"""
+
+    def test_empty_is_allowed(self):
+        """允许不填 —— 老客户端与历史数据都没有这个字段。"""
+        check_project_category(None)
+
+    @pytest.mark.parametrize("value", [1, 2])
+    def test_known_categories_pass(self, value):
+        check_project_category(value)
+
+    @pytest.mark.parametrize("value", [0, 3, 99, -1])
+    def test_unknown_category_rejected(self, value):
+        with pytest.raises(ValidationFailed) as exc:
+            check_project_category(value)
+        assert exc.value.code == "R-31"
+
+    def test_enum_members_are_accepted(self):
+        """传枚举成员本身也该通过 —— 混入枚举的 hash 等于裸值。"""
+        check_project_category(ProjectCategory.LARGE)
+        check_project_category(ProjectCategory.SMALL)
+
+
+class TestCheckProductSelection:
+    """R-31：产品型号必须隶属所选产品系列（Issue #5）。
+
+    页面上有联动下拉，但前端过滤只是体验：直接调接口、改 DOM 都能绕过。
+    这些用例守的是服务端那一层。
+    """
+
+    def test_both_empty_is_allowed(self):
+        check_product_selection(None, None)
+        check_product_selection("", "")
+
+    def test_series_without_model_is_allowed(self):
+        """只选系列不选型号是合法中间态 —— 型号允许稍后再定。"""
+        check_product_selection("卫星通信天线", None)
+        check_product_selection("卫星通信天线", "")
+
+    @pytest.mark.parametrize(
+        ("series", "model"),
+        [
+            (series, model)
+            for series, models in PRODUCT_SERIES_MODELS.items()
+            for model in models
+        ],
+    )
+    def test_every_configured_model_is_accepted(self, series, model):
+        """清单里的每个组合都必须通过 —— 防止清单与校验逻辑写岔。"""
+        check_product_selection(series, model)
+
+    def test_model_without_series_is_rejected(self):
+        """没有系列就无从判断归属，宁可报错也不要放一个来历不明的型号进库。"""
+        with pytest.raises(ValidationFailed) as exc:
+            check_product_selection(None, "YECT005W1A")
+        assert exc.value.code == "R-31"
+        assert "先选择产品系列" in exc.value.message
+
+    def test_cross_series_model_is_rejected(self):
+        """真实的坏组合：卫星通信天线的项目挂了蜂窝天线的型号。"""
+        with pytest.raises(ValidationFailed) as exc:
+            check_product_selection("卫星通信天线", "YECT005W1A")
+        assert exc.value.code == "R-31"
+        assert exc.value.details["allowed_models"] == list(PRODUCT_SERIES_MODELS["卫星通信天线"])
+
+    def test_unknown_series_is_rejected(self):
+        with pytest.raises(ValidationFailed) as exc:
+            check_product_selection("量子天线", None)
+        assert exc.value.code == "R-31"
+
+    def test_unknown_model_in_known_series_is_rejected(self):
+        with pytest.raises(ValidationFailed) as exc:
+            check_product_selection("GNSS定位天线", "YECT005W1A")
+        assert exc.value.code == "R-31"
+
+    @pytest.mark.parametrize("series", list(PRODUCT_SERIES_MODELS))
+    def test_series_names_are_non_empty(self, series):
+        """清单完整性：不允许出现空系列或空型号，否则下拉框会渲染出空选项。"""
+        assert series.strip() == series
+        assert PRODUCT_SERIES_MODELS[series], f"{series} 没有配置任何型号"
+
+    def test_whitespace_is_trimmed(self):
+        """表单值两侧带空格时不该被判成未知系列。"""
+        check_product_selection(" 卫星通信天线 ", " YFTA009E3AM ")
+
+    def test_model_codes_have_no_invisible_characters(self):
+        """从需求文档复制型号时极易带入零宽字符，肉眼完全看不出来。"""
+        import unicodedata
+
+        for series, models in PRODUCT_SERIES_MODELS.items():
+            for model in models:
+                assert model == unicodedata.normalize("NFKC", model)
+                assert not any(ord(ch) > 127 for ch in model), f"{series}/{model} 含非 ASCII 字符"

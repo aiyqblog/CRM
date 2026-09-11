@@ -73,6 +73,11 @@ class ProjectIn(BaseModel):
     project_type: int = 1
     product_lines: list[str] | None = None
     applied_industry: str | None = None
+    #: Issue #5 新增：项目类别（R-31）、产品系列/型号（R-31）、预计 DWIN 日期
+    project_category: int | None = None
+    product_series: str | None = None
+    product_model: str | None = None
+    expected_dwin_date: date | None = None
     unit_price: float | None = None
     est_annual_qty: int | None = None
     lifecycle_years: int | None = None

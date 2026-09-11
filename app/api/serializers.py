@@ -13,6 +13,8 @@ from app.constants import (
     CLOSE_TYPE_LABELS,
     LOCATION_STATUS_LABELS,
     PLAN_STATUS_LABELS,
+    PRODUCT_SERIES_MODELS,
+    PROJECT_CATEGORY_LABELS,
     PROJECT_TYPE_LABELS,
     RECORD_STATUS_LABELS,
     ROLE_LABELS,
@@ -23,6 +25,7 @@ from app.constants import (
     CloseType,
     LocationStatus,
     PlanStatus,
+    ProjectCategory,
     ProjectStage,
     ProjectStatus,
     ProjectType,
@@ -171,6 +174,17 @@ def project_out(project: SalesProject, *, detail: bool = False) -> dict:
         "project_type_label": PROJECT_TYPE_LABELS.get(ProjectType(project.project_type)),
         "product_lines": project.product_lines,
         "applied_industry": project.applied_industry,
+        "project_category": project.project_category,
+        "project_category_label": (
+            PROJECT_CATEGORY_LABELS.get(ProjectCategory(project.project_category))
+            if project.project_category
+            else None
+        ),
+        "product_series": project.product_series,
+        "product_model": project.product_model,
+        #: 该系列下允许的全部型号 —— 前端联动下拉与排查「型号为何被拒」都用它
+        "product_series_models": PRODUCT_SERIES_MODELS.get(project.product_series or "", []),
+        "expected_dwin_date": _iso(project.expected_dwin_date),
         "stage": project.stage,
         "stage_label": STAGE_LABELS.get(stage),
         "stage_enter_time": _iso(project.stage_enter_time),

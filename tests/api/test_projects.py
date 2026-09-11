@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.constants import GATE_ITEMS, ProjectStage
+from app.constants import GATE_ITEMS, PRODUCT_SERIES_MODELS, ProjectCategory, ProjectStage
 from app.models import SalesProject
 
 pytestmark = pytest.mark.api
@@ -491,3 +491,94 @@ def test_project_visits_timeline(as_sales, customer_id):
     response = as_sales.get(f"/api/projects/{project['id']}/visits")
     assert response.status_code == 200
     assert len(response.json()["items"]) == 1
+
+
+# ==========================================================================
+# 创建页新增栏位（Issue #5，R-31）
+# ==========================================================================
+def test_create_project_persists_new_fields(as_sales, customer_id):
+    body = create_project(
+        as_sales,
+        customer_id,
+        project_category=int(ProjectCategory.SMALL),
+        product_series="5G/4G蜂窝天线",
+        product_model="YECT004W1A",
+        expected_dwin_date="2026-12-01",
+    ).json()
+
+    assert body["project_category"] == 2
+    assert body["project_category_label"] == "小型项目"
+    assert body["product_series"] == "5G/4G蜂窝天线"
+    assert body["product_model"] == "YECT004W1A"
+    assert body["expected_dwin_date"] == "2026-12-01"
+    # 该系列下的全部型号一并返回，前端联动与排查「型号为何被拒」都用它
+    assert body["product_series_models"] == list(PRODUCT_SERIES_MODELS["5G/4G蜂窝天线"])
+
+
+def test_create_project_without_new_fields_still_works(as_sales, customer_id):
+    """向后兼容：不传新字段的老客户端必须能照常创建。"""
+    body = create_project(as_sales, customer_id).json()
+
+    assert body["project_category"] is None
+    assert body["project_category_label"] is None
+    assert body["product_series"] is None
+    assert body["product_model"] is None
+    assert body["expected_dwin_date"] is None
+    assert body["product_series_models"] == []
+
+
+@pytest.mark.parametrize(
+    ("series", "model"),
+    [(series, models[0]) for series, models in PRODUCT_SERIES_MODELS.items()],
+)
+def test_each_series_accepts_its_first_model(as_sales, customer_id, series, model):
+    response = create_project(
+        as_sales, customer_id, product_series=series, product_model=model
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["product_model"] == model
+
+
+def test_model_must_belong_to_selected_series(as_sales, customer_id):
+    """R-31：跨系列组合必须被服务端拦下 —— 前端联动是拦不住的。"""
+    response = create_project(
+        as_sales, customer_id, product_series="卫星通信天线", product_model="YECT005W1A"
+    )
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "R-31"
+    assert body["details"]["product_series"] == "卫星通信天线"
+
+
+def test_model_without_series_is_rejected(as_sales, customer_id):
+    response = create_project(as_sales, customer_id, product_model="YECT005W1A")
+    assert response.status_code == 400
+    assert response.json()["code"] == "R-31"
+
+
+def test_unknown_series_is_rejected(as_sales, customer_id):
+    response = create_project(as_sales, customer_id, product_series="量子天线")
+    assert response.status_code == 400
+    assert response.json()["code"] == "R-31"
+
+
+def test_unknown_category_is_rejected(as_sales, customer_id):
+    response = create_project(as_sales, customer_id, project_category=9)
+    assert response.status_code == 400
+    assert response.json()["code"] == "R-31"
+
+
+def test_rejected_project_is_not_persisted(as_sales, customer_id):
+    """校验失败必须整体回滚，不能留下半条脏数据。"""
+    before = as_sales.get("/api/projects", params={"keyword": "R-31 脏数据"}).json()["total"]
+
+    create_project(
+        as_sales,
+        customer_id,
+        project_name="R-31 脏数据",
+        product_series="卫星通信天线",
+        product_model="YECT005W1A",
+    )
+
+    after = as_sales.get("/api/projects", params={"keyword": "R-31 脏数据"}).json()["total"]
+    assert after == before

@@ -11,6 +11,7 @@ E2E 测试驱动表单时，后者会引入大量异步时序问题，而收益�
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
@@ -24,6 +25,8 @@ from app.constants import (
     CHANNEL_TYPE_LABELS,
     LOCATION_STATUS_LABELS,
     PLAN_STATUS_LABELS,
+    PRODUCT_SERIES_MODELS,
+    PROJECT_CATEGORY_LABELS,
     PROJECT_TYPE_LABELS,
     ROLE_LABELS,
     STAGE_LABELS,
@@ -32,6 +35,7 @@ from app.constants import (
     ChannelType,
     LocationStatus,
     PlanStatus,
+    ProjectCategory,
     ProjectStage,
     ProjectStatus,
     ProjectType,
@@ -45,7 +49,7 @@ from app.services import auth as auth_svc
 from app.services import gate, permission
 from app.services import project as project_svc
 from app.services import visit as visit_svc
-from app.services.errors import DomainError
+from app.services.errors import DomainError, ValidationFailed
 
 router = APIRouter(tags=["pages"], include_in_schema=False)
 
@@ -76,12 +80,16 @@ templates.env.globals.update(
     PROJECT_TYPE_LABELS=_plain_keyed(PROJECT_TYPE_LABELS),
     CHANNEL_TYPE_LABELS=_plain_keyed(CHANNEL_TYPE_LABELS),
     ROLE_LABELS=_plain_keyed(ROLE_LABELS),
+    PROJECT_CATEGORY_LABELS=_plain_keyed(PROJECT_CATEGORY_LABELS),
+    #: 产品系列 → 型号清单。模板拿它渲染联动下拉，与服务端校验同源（Issue #5）。
+    PRODUCT_SERIES_MODELS=PRODUCT_SERIES_MODELS,
     ProjectStage=ProjectStage,
     ProjectStatus=ProjectStatus,
     VisitType=VisitType,
     PlanStatus=PlanStatus,
     LocationStatus=LocationStatus,
     ProjectType=ProjectType,
+    ProjectCategory=ProjectCategory,
     ChannelType=ChannelType,
     Role=Role,
 )
@@ -123,6 +131,32 @@ def _scope_for(user):
     """在独立会话中解析数据范围，供模板判断按钮可见性。"""
     with SessionLocal() as db:
         return permission.resolve_scope(db, user)
+
+
+def _parse_int(raw: str | None) -> int | None:
+    """表单里的整数（下拉框选值）。空串＝未选，返回 None。
+
+    非法值不回退成 None —— 那会静默丢字段。这里直接报错，
+    由服务层的 R-31 统一给出可读提示。
+    """
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise ValidationFailed("R-31", f"取值必须是整数，收到：{text}") from exc
+
+
+def _parse_date(raw: str | None, label: str) -> date | None:
+    """``<input type="date">`` 提交的 ``YYYY-MM-DD``。空串＝未填。"""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError as exc:
+        raise ValidationFailed("R-32", f"{label}格式不正确（应为 YYYY-MM-DD）：{text}") from exc
 
 
 # --------------------------------------------------------------------------
@@ -597,6 +631,12 @@ def project_create(
     channel_type: Annotated[int, Form()] = 1,
     applied_industry: Annotated[str, Form()] = "",
     competitor: Annotated[str, Form()] = "",
+    # Issue #5 新增栏位。名字必须与模板 name 一致 —— 不一致时 FastAPI 只取默认值、
+    # 不报错，字段会永远为空（见 crm-code-guard 3.1）。
+    project_category: Annotated[str, Form()] = "",
+    product_series: Annotated[str, Form()] = "",
+    product_model: Annotated[str, Form()] = "",
+    expected_dwin_date: Annotated[str, Form()] = "",
 ):
     with SessionLocal() as db:
         user = _current_user_or_redirect(request, db)
@@ -620,6 +660,10 @@ def project_create(
                 channel_type=channel_type,
                 applied_industry=applied_industry or None,
                 competitor=competitor or None,
+                project_category=_parse_int(project_category),
+                product_series=product_series.strip() or None,
+                product_model=product_model.strip() or None,
+                expected_dwin_date=_parse_date(expected_dwin_date, "预计DWIN日期"),
             )
         except DomainError as exc:
             db.rollback()

@@ -231,13 +231,69 @@ def test_project_funnel_updates_after_creation(as_sales_crm):
     assert "机会识别" in crm.page.get_by_test_id("funnel-chart").inner_text()
 
 
+# ==========================================================================
+# Issue #5：创建页新增栏位与产品系列/型号联动
+# ==========================================================================
+def test_project_form_model_options_follow_series(as_sales_crm):
+    """选完产品系列，型号下拉必须变成该系列独有的型号清单。
+
+    这条只能在真浏览器里测：联动是页面上的 JS 行为，
+    接口测试与模板静态断言都看不见「切换系列后 DOM 变了没有」。
+    """
+    crm = as_sales_crm.goto("/projects")
+    series = crm.page.get_by_test_id("project-series")
+    model = crm.page.get_by_test_id("project-model")
+
+    # 初始状态：还没选系列，型号下拉只有占位项
+    assert model.locator("option").count() == 1
+    assert model.locator("option").first.inner_text() == "请先选择产品系列"
+
+    series.select_option(label="卫星通信天线")
+    assert model.locator("option").all_inner_texts() == [
+        "请选择产品型号",
+        "YFTA009E3AM",
+        "YEGM023AA",
+    ]
+
+    # 换一个系列，清单必须整体换掉 —— 不能残留上一个系列的型号
+    series.select_option(label="GNSS定位天线")
+    options = model.locator("option").all_inner_texts()
+    assert "YFTA009E3AM" not in options
+    assert {"YFGC007E3A", "YEGT000W8A"} <= set(options)
+
+
+def test_project_with_new_fields_is_created(as_sales_crm):
+    """带新栏位走完整创建流程，并确认值真的落了库（读接口回验）。"""
+    crm = as_sales_crm.goto("/projects")
+    name = uniq("E2E新栏位")
+    crm.page.get_by_test_id("project-name").fill(name)
+    crm.page.get_by_test_id("project-customer").select_option(label=NANSHAN_CUSTOMER)
+    crm.page.get_by_test_id("project-category").select_option(label="大型项目")
+    crm.page.get_by_test_id("project-dwin").fill("2026-12-01")
+    crm.page.get_by_test_id("project-series").select_option(label="5G/4G蜂窝天线")
+    crm.page.get_by_test_id("project-model").select_option("YECT028W1A")
+
+    crm.submit("project-submit")
+
+    assert crm.path.startswith("/projects/")
+    project_id = crm.path.rsplit("/", 1)[-1]
+
+    detail = crm.page.evaluate(
+        f"() => fetch('/api/projects/{project_id}').then(r => r.json())"
+    )
+    assert detail["project_category"] == 1
+    assert detail["project_category_label"] == "大型项目"
+    assert detail["product_series"] == "5G/4G蜂窝天线"
+    assert detail["product_model"] == "YECT028W1A"
+    assert detail["expected_dwin_date"] == "2026-12-01"
+
+
 def test_advance_blocked_by_gate_then_succeeds(as_sales_crm):
     """门禁机制主路径：缺产出物被拦 → 补齐 → 推进成功。"""
     crm = _open_project_form(as_sales_crm)
 
     crm.submit("advance-submit")
     assert "R-20" in crm.flash
-
     crm.page.get_by_test_id("gate-form-G1-01").locator("input").fill(
         "客户确认需要 AI 模组，年用量 20 万片"
     )

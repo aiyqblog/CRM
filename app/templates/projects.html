@@ -129,6 +129,37 @@
             <input id="competitor" name="competitor">
           </div>
         </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="project_category">项目类别</label>
+            <select id="project_category" name="project_category" data-testid="project-category">
+              {% for key, label in PROJECT_CATEGORY_LABELS.items() %}
+              <option value="{{ key }}"{% if key == ProjectCategory.SMALL.value %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="expected_dwin_date">预计DWIN日期</label>
+            <input type="date" id="expected_dwin_date" name="expected_dwin_date" data-testid="project-dwin">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="product_series">产品系列</label>
+            <select id="product_series" name="product_series" data-testid="project-series">
+              <option value="">请选择产品系列</option>
+              {% for series in PRODUCT_SERIES_MODELS %}
+              <option value="{{ series }}">{{ series }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="product_model">产品型号</label>
+            <select id="product_model" name="product_model" data-testid="project-model">
+              <option value="">请先选择产品系列</option>
+            </select>
+          </div>
+        </div>
         <div class="hint faint" style="margin:-4px 0 12px">
           年营收 = 单价 × 年用量；总营收 = 年营收 × 生命周期
         </div>
@@ -139,4 +170,34 @@
     </div>
   </div>
 </div>
+
+<script>
+  // 产品系列 → 型号联动（Issue #5）。
+  // 清单来自服务端（PRODUCT_SERIES_MODELS），与 R-31 的校验同源，
+  // 不允许在这里硬编码一份 —— 两处清单一旦漂移，用户就能选出注定被拒的组合。
+  (function () {
+    var MODELS = {{ PRODUCT_SERIES_MODELS | tojson }};
+    var series = document.getElementById('product_series');
+    var model = document.getElementById('product_model');
+    if (!series || !model) return;
+
+    function render() {
+      var list = MODELS[series.value] || [];
+      model.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = list.length ? '请选择产品型号' : '请先选择产品系列';
+      model.appendChild(placeholder);
+      list.forEach(function (code) {
+        var option = document.createElement('option');
+        option.value = code;
+        option.textContent = code;
+        model.appendChild(option);
+      });
+    }
+
+    series.addEventListener('change', render);
+    render();
+  })();
+</script>
 {% endblock %}

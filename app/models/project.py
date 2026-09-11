@@ -61,6 +61,15 @@ class SalesProject(Base):
     product_lines: Mapped[list | None] = mapped_column(JSON, nullable=True)
     applied_industry: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    #: 项目类别（Issue #5）：大型 / 小型。与 project_type（项目类型）不是一回事。
+    #: 可空 —— 历史数据由迁移回填默认值，不阻塞读取。
+    project_category: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: 产品系列与型号（Issue #5）。R-31：型号必须隶属所选系列，服务端二次校验。
+    product_series: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    product_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 预计 DWIN 日期（Issue #5）。客户口径的里程碑日期，与签约/量产日期并列。
+    expected_dwin_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     stage: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ProjectStage.OPPORTUNITY.value
     )

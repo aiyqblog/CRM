@@ -16,11 +16,14 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.constants import (
+    PRODUCT_SERIES_MODELS,
+    PROJECT_CATEGORY_LABELS,
     STAGE_LABELS,
     STAGE_TYPICAL_DAYS,
     STAGE_WIN_RATE,
     ChannelType,
     CloseType,
+    ProjectCategory,
     ProjectStage,
     ProjectStatus,
     StageAction,
@@ -80,6 +83,46 @@ def evaluate_stay_days(stage_enter_time: datetime, now: datetime) -> int:
     return max(0, (now - stage_enter_time).days)
 
 
+def check_project_category(value: int | None) -> None:
+    """R-31：项目类别必须是已知类别（Issue #5）。
+
+    空值放行 —— 该字段允许不填，页面下拉里也提供了「请选择」以外的默认项。
+    """
+    if value is None:
+        return
+    if value not in {int(member) for member in ProjectCategory}:
+        allowed = "、".join(PROJECT_CATEGORY_LABELS.values())
+        raise ValidationFailed("R-31", f"未知的项目类别：{value}（可选：{allowed}）")
+
+
+def check_product_selection(product_series: str | None, product_model: str | None) -> None:
+    """R-31：产品型号必须隶属所选产品系列（Issue #5）。
+
+    页面上做了一版联动下拉，但前端过滤只是体验，**服务端必须再判一次** ——
+    直接调接口、或改 DOM 都能绕过前端。这是典型的「只在界面成立」的约束，
+    一旦漏判，库里就会沉淀出「卫星通信天线 + YECT005W1A」这类坏组合。
+    """
+    series = (product_series or "").strip()
+    model = (product_model or "").strip()
+
+    if not series:
+        if model:
+            raise ValidationFailed("R-31", "请先选择产品系列，再选择产品型号")
+        return
+
+    models = PRODUCT_SERIES_MODELS.get(series)
+    if models is None:
+        allowed = "、".join(PRODUCT_SERIES_MODELS)
+        raise ValidationFailed("R-31", f"未知的产品系列：{series}（可选：{allowed}）")
+
+    if model and model not in models:
+        raise ValidationFailed(
+            "R-31",
+            f"产品型号 {model} 不属于产品系列「{series}」",
+            details={"product_series": series, "allowed_models": list(models)},
+        )
+
+
 # ==========================================================================
 # 查询
 # ==========================================================================
@@ -111,6 +154,10 @@ def create_project(
     project_type: int = 1,
     product_lines: list[str] | None = None,
     applied_industry: str | None = None,
+    project_category: int | None = None,
+    product_series: str | None = None,
+    product_model: str | None = None,
+    expected_dwin_date: date | None = None,
     unit_price: Decimal | float | None = None,
     est_annual_qty: int | None = None,
     lifecycle_years: int | None = None,
@@ -124,6 +171,10 @@ def create_project(
     """创建销售项目，并预生成全部阶段的产出物清单。"""
     if not permission.can_create(user):
         raise ValidationFailed("PERM-403", "当前角色不允许新建销售项目")
+
+    # R-31：选项类字段的取值约束（Issue #5）
+    check_project_category(project_category)
+    check_product_selection(product_series, product_model)
 
     now = utcnow()
     annual, total = compute_revenue(unit_price, est_annual_qty, lifecycle_years)
@@ -139,6 +190,10 @@ def create_project(
         project_type=project_type,
         product_lines=product_lines,
         applied_industry=applied_industry,
+        project_category=project_category,
+        product_series=product_series or None,
+        product_model=product_model or None,
+        expected_dwin_date=expected_dwin_date,
         stage=stage.value,
         stage_enter_time=now,
         stage_stay_days=0,
