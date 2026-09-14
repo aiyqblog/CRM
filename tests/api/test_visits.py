@@ -209,6 +209,15 @@ def test_checkout_keeps_receptionist_when_not_resubmitted(as_sales, customer_id)
     assert response.json()["receptionist"] == "李工"
 
 
+def test_checkout_keeps_next_action_when_not_resubmitted(as_sales, customer_id):
+    """Issue #9：签到已填后续计划、签退不重填时，保持原值（与接待人一致的 last-write-wins）。"""
+    record = do_checkin(as_sales, customer_id, next_action="下周提供样品").json()
+
+    response = do_checkout(as_sales, record["id"])
+    assert response.status_code == 200
+    assert response.json()["next_action"] == "下周提供样品"
+
+
 def test_checkout_short_content_rejected(as_sales, customer_id):
     """R-11：纪要至少 20 字。"""
     record = do_checkin(as_sales, customer_id).json()
