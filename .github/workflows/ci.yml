@@ -2,6 +2,13 @@ name: CI
 
 # 与本地 ci/run_pipeline.py 的阶段划分保持一致。
 # 本地绿、CI 红这类不一致比没有本地流水线更糟 —— 会让人不再信任本地结果。
+#
+# 三方 action 统一跟到大版本 v7：
+#   checkout v7.0.1 / setup-python v7.0.0 / upload-artifact v7.0.1
+# v5 起这些 action 改用 Node 24 运行时，要求 runner ≥ v2.327.1。
+# GitHub 托管 runner（ubuntu-latest）恒为最新版，无需额外处理；
+# 将来若换自托管 runner，必须先升级 runner 再动这里。
+# 注意 setup-python v7 移除了 `pip-install` 入参，本文件没用到它，不受影响。
 
 on:
   push:
@@ -26,8 +33,8 @@ jobs:
     name: 静态检查
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -39,8 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -58,8 +65,8 @@ jobs:
       # Linux runner 上没有系统 Chrome，用 Playwright 自带的 chromium
       CRM_E2E_BROWSER_CHANNEL: chromium
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -74,7 +81,7 @@ jobs:
         # Playwright 的 trace 是「自动定位失败根因」的关键材料，
         # 失败时务必留存，否则只能靠猜
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/
