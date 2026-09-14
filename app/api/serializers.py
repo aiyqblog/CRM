@@ -143,6 +143,7 @@ def record_out(record: VisitRecord, *, with_attachments: bool = True) -> dict:
         "location_note": record.location_note,
         "content": record.content,
         "customer_feedback": record.customer_feedback,
+        "receptionist": record.receptionist,
         "next_action": record.next_action,
         "next_visit_date": _iso(record.next_visit_date),
         "project_stage_after": record.project_stage_after,

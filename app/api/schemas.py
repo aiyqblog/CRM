@@ -54,6 +54,10 @@ class CheckinIn(BaseModel):
     is_mocked: bool = False
     offline: bool = False
     client_time: datetime | None = None
+    #: Issue #9：签到页可选采集（选填、自由文本）
+    content: str | None = None
+    next_action: str | None = None
+    receptionist: str | None = None
 
 
 class CheckoutIn(BaseModel):
@@ -61,6 +65,7 @@ class CheckoutIn(BaseModel):
     checkout_time: datetime | None = None
     customer_feedback: str | None = None
     next_action: str | None = None
+    receptionist: str | None = None
     next_visit_date: date | None = None
     location_note: str | None = None
 

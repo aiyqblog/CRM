@@ -208,6 +208,10 @@ def checkin(
     offline: bool = False,
     client_time: datetime | None = None,
     visit_type: int | None = None,
+    #: Issue #9：签到页可选采集。接待人选填、自由文本；沟通事项/后续计划可提前填。
+    content: str | None = None,
+    next_action: str | None = None,
+    receptionist: str | None = None,
 ) -> VisitRecord:
     """签到：创建一条进行中的拜访记录。
 
@@ -282,7 +286,9 @@ def checkin(
         checkin_address=address,
         location_status=location_status,
         distance_m=distance_m,
-        content="",  # 签到时先留空，签退时校验必填
+        content=content or "",  # 签到时可填，签退时再校验必填
+        next_action=next_action or None,
+        receptionist=receptionist or None,
         status=RecordStatus.ONGOING,
         abnormal_flag=abnormal_flag,
         abnormal_reason=abnormal_reason,
@@ -309,6 +315,7 @@ def checkout(
     checkout_time: datetime | None = None,
     customer_feedback: str | None = None,
     next_action: str | None = None,
+    receptionist: str | None = None,
     next_visit_date=None,
     location_note: str | None = None,
     sync_now: bool = True,
@@ -339,6 +346,8 @@ def checkout(
     record.content = content.strip()
     record.customer_feedback = customer_feedback
     record.next_action = next_action
+    #: Issue #9：签退可补填接待人，last-write-wins（空值保留签到时填的值）
+    record.receptionist = receptionist or record.receptionist
     record.next_visit_date = next_visit_date
     record.location_note = location_note
     record.status = RecordStatus.COMPLETED

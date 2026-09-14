@@ -171,6 +171,41 @@ def test_checkin_form_submits_values_the_api_accepts(client, customer_id):
     )
 
 
+def test_checkin_form_renders_issue9_fields(client, customer_id):
+    """Issue #9：签到表单必须渲染出三个新字段，且 name 与路由参数名逐字一致（B1）。"""
+    _login_form(client)
+    html = client.get("/visits/new").text
+
+    for name in ("receptionist", "content", "next_action"):
+        assert f'name="{name}"' in html, f"签到表单缺少字段 {name}"
+
+    # 接待人/后续计划是 input，沟通事项是 textarea
+    assert re.search(r'<input\b[^>]*\bname="receptionist"', html)
+    assert re.search(r'<textarea\b[^>]*\bname="content"', html)
+    assert re.search(r'<input\b[^>]*\bname="next_action"', html)
+
+    # 带约定 data-testid，方便 E2E 定位
+    assert 'data-testid="checkin-receptionist"' in html
+    assert 'data-testid="checkin-content"' in html
+    assert 'data-testid="checkin-next"' in html
+
+
+def test_checkout_form_renders_receptionist_field(client, customer_id):
+    """Issue #9：签退表单也保留接待人输入，name 与签退路由参数一致（B1）。"""
+    _login_form(client)
+    response = client.post(
+        "/visits/checkin",
+        data={"customer_id": str(customer_id), "visit_type": "2", "is_mocked": "0",
+              "address": "", "longitude": "", "latitude": "", "plan_id": ""},
+    )
+    record_id = response.headers["location"].split("/")[2].split("?")[0]
+
+    html = client.get(f"/visits/{record_id}").text
+    assert 'name="receptionist"' in html
+    assert re.search(r'<input\b[^>]*\bname="receptionist"', html)
+    assert 'data-testid="checkout-receptionist"' in html
+
+
 def test_role_label_renders_in_navbar(client):
     """角色徽标不能渲染成 "Role.SALES"。"""
     _login_form(client)

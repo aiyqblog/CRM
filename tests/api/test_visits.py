@@ -152,6 +152,31 @@ def test_checkin_missing_customer(as_sales):
     assert response.status_code == 404
 
 
+def test_checkin_persists_issue9_fields(as_sales, customer_id):
+    """Issue #9：签到时带 content/next_action/receptionist 必须落库并由 record_out 回显。"""
+    response = do_checkin(
+        as_sales,
+        customer_id,
+        content="已与客户确认模组选型方向",
+        next_action="下周提供样品",
+        receptionist="张经理",
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["content"] == "已与客户确认模组选型方向"
+    assert body["next_action"] == "下周提供样品"
+    assert body["receptionist"] == "张经理"
+
+
+def test_checkin_optional_fields_default_to_none(as_sales, customer_id):
+    """Issue #9：三字段均可选填，不传时落库为 None 而不报错。"""
+    response = do_checkin(as_sales, customer_id)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["receptionist"] is None
+    assert body["next_action"] is None
+
+
 # ==========================================================================
 # 签退
 # ==========================================================================
@@ -165,10 +190,37 @@ def test_checkout_success(as_sales, customer_id):
     assert body["content"] == LONG_CONTENT
 
 
+def test_checkout_can_fill_receptionist_later(as_sales, customer_id):
+    """Issue #9：签到未填接待人时，签退可补填（last-write-wins）。"""
+    record = do_checkin(as_sales, customer_id).json()
+    assert record["receptionist"] is None
+
+    response = do_checkout(as_sales, record["id"], receptionist="王接待")
+    assert response.status_code == 200
+    assert response.json()["receptionist"] == "王接待"
+
+
+def test_checkout_keeps_receptionist_when_not_resubmitted(as_sales, customer_id):
+    """Issue #9：签到已填接待人、签退不重填时，保持原值（空表单不覆盖）。"""
+    record = do_checkin(as_sales, customer_id, receptionist="李工").json()
+
+    response = do_checkout(as_sales, record["id"])
+    assert response.status_code == 200
+    assert response.json()["receptionist"] == "李工"
+
+
 def test_checkout_short_content_rejected(as_sales, customer_id):
     """R-11：纪要至少 20 字。"""
     record = do_checkin(as_sales, customer_id).json()
     response = do_checkout(as_sales, record["id"], content="太短了")
+    assert response.status_code == 400
+    assert response.json()["code"] == "R-11"
+
+
+def test_checkout_empty_content_rejected(as_sales, customer_id):
+    """R-11：空纪要（即使签到了内容）仍被拦截 —— 纪要以签退提交为准。"""
+    record = do_checkin(as_sales, customer_id, content="签到阶段写的内容").json()
+    response = do_checkout(as_sales, record["id"], content="")
     assert response.status_code == 400
     assert response.json()["code"] == "R-11"
 

@@ -274,6 +274,42 @@ def test_checkout_form_fields_are_persisted(client, customer_id):
     assert detail["next_action"] == action
 
 
+def test_checkin_form_fields_are_persisted(client, customer_id):
+    """Issue #9：按模板 name 提交三字段，读 /api/visits/{id} 断言值真的入库。
+
+    比「通用交叉校验」更强一层：交叉校验只证明名字没写错，
+    这里证明值真的走到了库里 —— 字段名写错时 FastAPI 只取默认值、
+    不报错，字段会静静变成空（B1 红线）。
+    """
+    _login(client)
+    receptionist = "现场接待人张经理"
+    content = "签到阶段记录的沟通事项：客户介绍了当前产线情况。"
+    next_action = "签到阶段登记的后续推进计划"
+
+    response = client.post(
+        "/visits/checkin",
+        data={
+            "customer_id": str(customer_id),
+            "visit_type": "2",
+            "is_mocked": "0",
+            "address": "",
+            "longitude": "",
+            "latitude": "",
+            "plan_id": "",
+            "receptionist": receptionist,
+            "content": content,
+            "next_action": next_action,
+        },
+    )
+    assert response.status_code == 303
+    record_id = response.headers["location"].split("/")[2].split("?")[0]
+
+    detail = client.get(f"/api/visits/{record_id}").json()
+    assert detail["receptionist"] == receptionist
+    assert detail["content"] == content
+    assert detail["next_action"] == next_action
+
+
 def test_customer_form_fields_are_persisted(client, customer_id):
     _login(client)
     response = client.post(

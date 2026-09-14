@@ -29,6 +29,18 @@ CREATE TABLE sales_project (
 
 NEW_COLUMNS = {"project_category", "product_series", "product_model", "expected_dwin_date"}
 
+#: Issue #9 之前 visit_record 表结构（只保留判定所需的列）。
+#: 关键点：`receptionist` 列「还没出生」，用来钉死「老库补列」路径。
+LEGACY_VISIT_SCHEMA = """
+CREATE TABLE visit_record (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_no VARCHAR(32) NOT NULL,
+    customer_id INTEGER NOT NULL
+)
+"""
+
+VISIT_NEW_COLUMNS = {"receptionist"}
+
 
 def _legacy_engine(tmp_path) -> sa.Engine:
     """建一个只有老列、并带着一行存量数据的库。"""
@@ -109,3 +121,46 @@ def test_fresh_schema_already_has_new_columns(db):
     engine = db.get_bind()
 
     assert NEW_COLUMNS <= _columns(engine)
+
+
+# ==========================================================================
+# Issue #9：visit_record.receptionist 后加列
+# ==========================================================================
+def _legacy_visit_engine(tmp_path) -> sa.Engine:
+    """建一个缺 receptionist 列的「老 visit_record 表」。"""
+    engine = sa.create_engine(f"sqlite:///{(tmp_path / 'legacy_visit.db').as_posix()}")
+    with engine.begin() as conn:
+        conn.execute(sa.text(LEGACY_VISIT_SCHEMA))
+        conn.execute(
+            sa.text(
+                "INSERT INTO visit_record (record_no, customer_id) "
+                "VALUES ('VSR-LEGACY-1', 1)"
+            )
+        )
+    return engine
+
+
+def _visit_columns(engine: sa.Engine) -> set[str]:
+    return {col["name"] for col in sa.inspect(engine).get_columns("visit_record")}
+
+
+def test_visit_receptionist_added_to_existing_table(tmp_path):
+    """B4：老库缺 receptionist 列时，补列后必须存在，否则查询报 no such column。"""
+    engine = _legacy_visit_engine(tmp_path)
+    assert "receptionist" not in _visit_columns(engine), "前置条件不成立：老库不该有 receptionist"
+
+    added = ensure_new_columns(engine)
+
+    assert "receptionist" in _visit_columns(engine)
+    assert "visit_record.receptionist" in added
+
+
+def test_visit_receptionist_topup_is_idempotent(tmp_path):
+    """重复执行 ensure_new_columns 不应再报告新增列（也不应报错）。"""
+    engine = _legacy_visit_engine(tmp_path)
+
+    ensure_new_columns(engine)
+    second = ensure_new_columns(engine)
+
+    assert second == []
+    assert "receptionist" in _visit_columns(engine)

@@ -184,6 +184,9 @@ def checkin(payload: CheckinIn, user: CurrentUser, db: DbSession) -> dict:
         offline=payload.offline,
         client_time=payload.client_time,
         visit_type=payload.visit_type,
+        content=payload.content,
+        next_action=payload.next_action,
+        receptionist=payload.receptionist,
     )
     db.commit()
     db.refresh(record)
@@ -201,6 +204,7 @@ def checkout(record_id: int, payload: CheckoutIn, user: CurrentUser, db: DbSessi
         checkout_time=payload.checkout_time,
         customer_feedback=payload.customer_feedback,
         next_action=payload.next_action,
+        receptionist=payload.receptionist,
         next_visit_date=payload.next_visit_date,
         location_note=payload.location_note,
     )
