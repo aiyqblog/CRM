@@ -57,6 +57,11 @@
             <label for="next_action">下一步计划</label>
             <input id="next_action" name="next_action" data-testid="checkout-next">
           </div>
+          <div class="field">
+            <label for="receptionist">客户接待人（选填）</label>
+            <input id="receptionist" name="receptionist" data-testid="checkout-receptionist"
+                   placeholder="现场接待本次拜访的人员姓名">
+          </div>
           <div class="form-actions">
             <button class="btn btn-primary" type="submit" data-testid="checkout-submit">提交签退</button>
           </div>
@@ -78,6 +83,12 @@
         <div style="margin-top:14px">
           <div class="faint" style="font-size:12px;margin-bottom:4px">下一步计划</div>
           <div>{{ record.next_action }}</div>
+        </div>
+        {% endif %}
+        {% if record.receptionist %}
+        <div style="margin-top:14px" data-testid="visit-receptionist">
+          <div class="faint" style="font-size:12px;margin-bottom:4px">客户接待人</div>
+          <div>{{ record.receptionist }}</div>
         </div>
         {% endif %}
         {% if record.location_note %}

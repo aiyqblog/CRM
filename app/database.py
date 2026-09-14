@@ -84,6 +84,7 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("sales_project", "product_series", "VARCHAR(64)"),
     ("sales_project", "product_model", "VARCHAR(64)"),
     ("sales_project", "expected_dwin_date", "DATE"),
+    ("visit_record", "receptionist", "VARCHAR(100)"),
 )
 
 

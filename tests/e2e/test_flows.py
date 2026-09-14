@@ -138,6 +138,11 @@ def _checkin(crm, *, visit_type: str = "例行拜访", mocked: str = "0"):
     crm.page.get_by_test_id("checkin-customer").select_option(label=NANSHAN_CUSTOMER)
     crm.page.get_by_test_id("checkin-type").select_option(label=visit_type)
     crm.page.get_by_test_id("checkin-mocked").select_option(mocked)
+    crm.page.get_by_test_id("checkin-receptionist").fill("现场接待人张经理")
+    crm.page.get_by_test_id("checkin-content").fill(
+        "签到阶段记录的沟通事项：客户介绍了当前产线情况。"
+    )
+    crm.page.get_by_test_id("checkin-next").fill("签到阶段登记的后续推进计划")
     crm.submit("checkin-submit")
     return crm
 
@@ -163,6 +168,9 @@ def test_full_visit_flow(as_sales_crm):
 
     assert "拜访已提交" in crm.flash
     assert crm.page.get_by_test_id("visit-content").count() == 1
+    # Issue #9：客户接待人应在详情页回显
+    assert crm.page.get_by_test_id("visit-receptionist").count() == 1
+    assert "现场接待人张经理" in crm.page.get_by_test_id("visit-receptionist").inner_text()
     assert "已完成" in crm.page.content()
 
 

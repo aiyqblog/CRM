@@ -463,6 +463,10 @@ def visit_checkin(
     visit_type: Annotated[int, Form()] = 2,
     is_mocked: Annotated[int, Form()] = 0,
     plan_id: Annotated[str, Form()] = "",
+    #: Issue #9：签到页采集（名字必须与模板 name 一致）
+    receptionist: Annotated[str, Form()] = "",
+    content: Annotated[str, Form()] = "",
+    next_action: Annotated[str, Form()] = "",
 ):
     """页面签到。
 
@@ -501,6 +505,9 @@ def visit_checkin(
                 address=address or customer.address or "未填写地址",
                 is_mocked=bool(is_mocked),
                 visit_type=visit_type,
+                content=content or None,
+                next_action=next_action or None,
+                receptionist=receptionist or None,
             )
         except DomainError as exc:
             db.rollback()
@@ -539,6 +546,8 @@ def visit_checkout(
     customer_feedback: Annotated[str, Form()] = "",
     next_action: Annotated[str, Form()] = "",
     location_note: Annotated[str, Form()] = "",
+    #: Issue #9：签退可补填接待人（名字必须与模板 name 一致）
+    receptionist: Annotated[str, Form()] = "",
 ):
     with SessionLocal() as db:
         user = _current_user_or_redirect(request, db)
@@ -557,6 +566,7 @@ def visit_checkout(
                 content=content,
                 customer_feedback=customer_feedback or None,
                 next_action=next_action or None,
+                receptionist=receptionist or None,
                 location_note=location_note or None,
             )
         except DomainError as exc:

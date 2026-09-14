@@ -102,6 +102,8 @@ class VisitRecord(Base):
     location_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    #: 现场接待人（Issue #9：签到页采集）。自由文本、选填。
+    receptionist: Mapped[str | None] = mapped_column(String(100), nullable=True)
     customer_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     next_action: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     next_visit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
