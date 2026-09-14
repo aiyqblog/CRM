@@ -55,7 +55,8 @@
           </div>
           <div class="field">
             <label for="next_action">下一步计划</label>
-            <input id="next_action" name="next_action" data-testid="checkout-next">
+            <input id="next_action" name="next_action" data-testid="checkout-next"
+                   value="{{ record.next_action or '' }}">
           </div>
           <div class="field">
             <label for="receptionist">客户接待人（选填）</label>

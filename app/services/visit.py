@@ -345,7 +345,8 @@ def checkout(
     record.duration_min = compute_duration_min(record.checkin_time, effective_checkout)
     record.content = content.strip()
     record.customer_feedback = customer_feedback
-    record.next_action = next_action
+    #: 签退可补填后续推进计划，last-write-wins（空值保留签到时填的值，与接待人一致）
+    record.next_action = next_action or record.next_action
     #: Issue #9：签退可补填接待人，last-write-wins（空值保留签到时填的值）
     record.receptionist = receptionist or record.receptionist
     record.next_visit_date = next_visit_date
